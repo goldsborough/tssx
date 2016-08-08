@@ -37,8 +37,6 @@ int select(int nfds,
 	size_t tssx_count, normal_count, lowest_fd;
 	_count_tssx_sockets(nfds, &sets, &lowest_fd, &normal_count, &tssx_count);
 
-	printf("select\n");
-
 	if (normal_count == 0) {
 		return _select_on_tssx_only(&sets, tssx_count, lowest_fd, nfds, timeout);
 	} else if (tssx_count == 0) {

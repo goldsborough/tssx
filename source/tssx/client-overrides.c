@@ -88,14 +88,10 @@ int setup_tssx(int fd) {
 	// Read the options first
 	options = options_from_socket(fd, CLIENT);
 
-	printf("Waiting for ID\n");
-
 	segment_id = read_segment_id_from_server(fd);
 	if (segment_id == ERROR) {
 		return ERROR;
 	}
-
-	printf("Segment id: %d\n", segment_id);
 
 	session.connection = setup_connection(segment_id, &options);
 	if (session.connection == NULL) {

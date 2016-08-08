@@ -59,10 +59,7 @@ ssize_t connection_write(int key,
 
 	session = bridge_lookup(&bridge, key);
 	if (session_has_connection(session)) {
-		if (connection_peer_died(session->connection)) {
-			printf("Peer has died\n");
-			return 0;
-		}
+		if (connection_peer_died(session->connection)) return 0;
 		// clang-format off
     return buffer_write(
         get_buffer(session->connection, which_buffer),
@@ -83,10 +80,7 @@ ssize_t connection_read(int key,
 
 	session = bridge_lookup(&bridge, key);
 	if (session_has_connection(session)) {
-		if (connection_peer_died(session->connection)) {
-			printf("Peer has died\n");
-			return 0;
-		}
+		if (connection_peer_died(session->connection)) return 0;
 		// clang-format off
     return buffer_read(
         get_buffer(session->connection, which_buffer),

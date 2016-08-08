@@ -63,6 +63,12 @@ int _partition(Vector* tssx_fds,
 	}
 
 	for (nfds_t index = 0; index < number_of_fds; ++index) {
+		assert(fds[index].fd > 0);
+
+		// This is necessary for repeated calls with the same poll structures
+		// (the kernel probably does this internally first too)
+		fds[index].revents = 0;
+
 		Session* session = bridge_lookup(&bridge, fds[index].fd);
 		if (session_has_connection(session)) {
 			PollEntry entry;
@@ -319,8 +325,6 @@ void _poll_signal_handler(int signal_number) {
 }
 
 void _cleanup(Vector* tssx_fds, Vector* other_fds) {
-	printf("before cleanup\n");
 	vector_destroy(tssx_fds);
-	// vector_destroy(other_fds);
-	printf("after cleanup\n");
+	vector_destroy(other_fds);
 }

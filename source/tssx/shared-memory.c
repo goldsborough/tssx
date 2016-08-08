@@ -26,9 +26,6 @@ int create_segment(int total_size) {
 		// else just keep generating new keys (this one was taken)
 	}
 
-	printf("Created segment %d\n", id);
-	sleep(5);
-
 	return id;
 }
 
