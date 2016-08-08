@@ -23,6 +23,8 @@ void epoll_loop(int server_socket) {
 
 		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
 	}
+
+	close(epfd);
 }
 
 int _request_epoll_fd() {
@@ -50,6 +52,11 @@ void _remove_epoll_socket(int epfd, int socket_fd) {
 	if (epoll_ctl(epfd, EPOLL_CTL_DEL, socket_fd, NULL) == ERROR) {
 		throw("Error removing socket from epoll instance");
 	}
+
+	if (close(socket_fd) == ERROR) {
+		throw("Error closing socket descriptor");
+	}
+
 	printf("Death to client %d\n", socket_fd);
 }
 

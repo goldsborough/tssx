@@ -64,8 +64,6 @@ int create_socket() {
 
 	connection = socket(PF_LOCAL, SOCK_STREAM, 0);
 
-	printf("%d\n", connection);
-
 	if (connection == -1) {
 		throw("Error creating socket on client-side");
 	}

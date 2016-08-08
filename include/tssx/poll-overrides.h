@@ -81,6 +81,7 @@ bool _poll_timeout_elapsed(size_t start, int timeout);
 int _install_poll_signal_handler(struct sigaction *old_action);
 int _restore_old_signal_action(struct sigaction *old_action);
 void _poll_signal_handler(int signal_number);
+void _kill_other_thread(pthread_t other_thread);
 
 void _cleanup(struct Vector *tssx_fds, struct Vector *other_fds);
 

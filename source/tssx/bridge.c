@@ -4,10 +4,10 @@
 #include <signal.h>
 #include <stdlib.h>
 
-#include "utility/utility.h"
 #include "tssx/bridge.h"
 #include "tssx/connection.h"
 #include "tssx/session.h"
+#include "utility/utility.h"
 
 
 /******************** GLOBAL DATA ********************/
@@ -23,6 +23,8 @@ signal_handler_t old_sigabrt_handler = NULL;
 void bridge_setup(Bridge* bridge) {
 	assert(bridge != NULL);
 	assert(!bridge_is_initialized(bridge));
+
+	printf("?????????\n");
 
 	session_table_setup(&bridge->session_table);
 	_setup_exit_handling();
@@ -60,7 +62,7 @@ void bridge_insert(Bridge* bridge, int fd, Session* session) {
 	session_table_assign(&bridge->session_table, fd, session);
 }
 
-void bridge_free(Bridge* bridge, int fd) {
+void bridge_erase(Bridge* bridge, int fd) {
 	Session* session;
 	assert(bridge_is_initialized(bridge));
 
@@ -118,6 +120,8 @@ void _setup_signal_handler(int signal_number) {
 		throw("Error setting signal handler in bridge");
 	}
 
+	printf("Seting up signal handler for bridge\n");
+
 	if (signal_number == SIGINT) {
 		old_sigint_handler = old_action.sa_handler;
 	} else if (signal_number == SIGTERM) {
@@ -128,6 +132,7 @@ void _setup_signal_handler(int signal_number) {
 }
 
 void _bridge_signal_handler(int signal_number) {
+	printf("Handling %d in bridge\n", signal_number);
 	if (signal_number == SIGINT) {
 		_bridge_signal_handler_for(SIGINT, old_sigint_handler);
 	} else if (signal_number == SIGTERM) {

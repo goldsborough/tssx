@@ -129,3 +129,5 @@ flycheck_*.el
 
 ### Other ###
 build/
+
+.tags*

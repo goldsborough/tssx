@@ -33,7 +33,7 @@ bool bridge_is_initialized(const Bridge* bridge);
 void bridge_add_user(Bridge* bridge);
 
 void bridge_insert(Bridge* bridge, int fd, struct Session* session);
-void bridge_free(Bridge* bridge, int fd);
+void bridge_erase(Bridge* bridge, int fd);
 
 struct Session* bridge_lookup(Bridge* bridge, int fd);
 bool bridge_has_connection(Bridge* bridge, int fd);

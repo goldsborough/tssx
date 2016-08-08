@@ -8,10 +8,10 @@
 #include <string.h>
 #include <sys/signal.h>
 
-#include "utility/utility.h"
 #include "tssx/bridge.h"
 #include "tssx/poll-overrides.h"
 #include "tssx/select-overrides.h"
+#include "utility/utility.h"
 
 /******************** REAL FUNCTION ********************/
 
@@ -42,7 +42,7 @@ int select(int nfds,
 	} else if (tssx_count == 0) {
 		return real_select(nfds, readfds, writefds, errorfds, timeout);
 	} else {
-		return _forward_to_poll(nfds, &sets, tssx_count, timeout);
+		return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
 	}
 }
 
@@ -284,7 +284,7 @@ void _copy_set(fd_set* destination, const fd_set* source) {
 	if (source == NULL) {
 		FD_ZERO(destination);
 	} else {
-	  *destination = *source;
+		*destination = *source;
 	}
 }
 

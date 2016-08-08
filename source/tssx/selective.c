@@ -6,9 +6,9 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-#include "utility/utility.h"
 #include "tssx/selective.h"
 #include "tssx/string-set.h"
+#include "utility/utility.h"
 
 StringSet selective_set = SS_INITIALIZER;
 

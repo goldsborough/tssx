@@ -148,7 +148,7 @@ int setsockopt(int key,
 }
 
 int close(int key) {
-	bridge_free(&bridge, key);
+	bridge_erase(&bridge, key);
 	return real_close(key);
 }
 

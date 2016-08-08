@@ -13,7 +13,7 @@ add_compile_options(-pthread)
 ## CONFIGURATION
 ###########################################################
 
-add_compile_options(-g -O3 -Wall -Werror -DNDEBUG)
+add_compile_options(-g -O3 -Wall -DDEBUG)
 # add_compile_options(-DNDEBUG)
 
 # Apple's C standard library already contains the math functions

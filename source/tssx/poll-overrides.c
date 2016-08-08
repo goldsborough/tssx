@@ -7,11 +7,11 @@
 #include <signal.h>
 #include <stdlib.h>
 
-#include "utility/common.h"
 #include "tssx/bridge.h"
 #include "tssx/poll-overrides.h"
 #include "tssx/session.h"
 #include "tssx/vector.h"
+#include "utility/common.h"
 
 /******************** REAL FUNCTIONS ********************/
 
@@ -51,12 +51,12 @@ const short _operation_map[2] = {POLLIN, POLLOUT};
 void _partition(Vector* tssx_fds,
 								Vector* other_fds,
 								struct pollfd fds[],
-								nfds_t number) {
+								nfds_t number_of_fds) {
 	// Minimum capacity of 16 each
 	vector_setup(tssx_fds, 16, sizeof(PollEntry));
 	vector_setup(other_fds, 16, sizeof(struct pollfd));
 
-	for (nfds_t index = 0; index < number; ++index) {
+	for (nfds_t index = 0; index < number_of_fds; ++index) {
 		Session* session = bridge_lookup(&bridge, fds[index].fd);
 		if (session_has_connection(session)) {
 			PollEntry entry;
@@ -99,7 +99,9 @@ int _concurrent_poll(Vector* tssx_fds, Vector* other_fds, int timeout) {
 	// the timeout, or via a change on the ready count (quasi condition variable)
 	// Although, note that POSIX requires a join to reclaim resources,
 	// unless we detach the thread with pthread_detach to make it a daemon
-	pthread_join(other_thread, NULL);
+	if (pthread_join(other_thread, NULL) != SUCCESS) {
+		return ERROR;
+	}
 	_restore_old_signal_action(&old_action);
 
 	// Three cases for the ready count
@@ -132,15 +134,18 @@ void _setup_tasks(PollTask* other_task,
 	other_task->timeout = timeout;
 	other_task->ready_count = ready_count;
 
-	tssx_task->fds = other_fds;
+	tssx_task->fds = tssx_fds;
 	tssx_task->timeout = timeout;
 	tssx_task->ready_count = ready_count;
 }
 
 void _other_poll(PollTask* task) {
-	int local_ready_count;
+	int local_ready_count = 0;
 	struct pollfd* raw = task->fds->data;
 	size_t size = task->fds->size;
+
+	assert(task != NULL);
+	assert(raw != NULL);
 
 	local_ready_count = real_poll(raw, size, task->timeout);
 
@@ -172,7 +177,7 @@ int _simple_tssx_poll(Vector* tssx_fds, int timeout) {
 	do {
 		// Do a full loop over all FDs
 		VECTOR_FOR_EACH(tssx_fds, iterator) {
-			PollEntry* entry = (PollEntry*)iterator_get(&iterator);
+			PollEntry* entry = iterator_get(&iterator);
 			if (_check_ready(entry, READ) || _check_ready(entry, WRITE)) {
 				++ready_count;
 			}
@@ -187,13 +192,16 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
 	size_t start = current_milliseconds();
 	size_t local_ready_count = 0;
 
+	assert(task != NULL);
+	assert(task->fds != NULL);
+
 	// Do-while for the case of non-blocking (timeout == -1)
 	// so that we do at least one iteration
 
 	do {
 		// Do a full loop over all FDs
 		VECTOR_FOR_EACH(task->fds, iterator) {
-			PollEntry* entry = (PollEntry*)iterator_get(&iterator);
+			PollEntry* entry = iterator_get(&iterator);
 			if (_check_ready(entry, READ) || _check_ready(entry, WRITE)) {
 				++local_ready_count;
 			}
@@ -205,18 +213,7 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
 		if (global_ready_count == ERROR) return;
 		if (global_ready_count > 0) break;
 		if (local_ready_count > 0) {
-			// Send our POLL_SIGNAL to the thread doing real_poll()
-			// This will terminate that thread, avoiding weird edge cases
-			// where the other thread would block indefinitely if it detects
-			// no changes (e.g. on a single fd), even if there were many events
-			// on the TSSX buffer in the main thread. Note: signals are a actually a
-			// process-wide concept. But because we installed a signal handler, what
-			// we can do is have the signal handler be invoked in the *other_thread*
-			// argument. If the disposition of the signal were a default (i.e. if we
-			// had installed no signal handler) one, such as TERMINATE for SIGQUIT,
-			// then that signal would be delivered to all threads, because all threads
-			// run in the same process
-			pthread_kill(other_thread, POLL_SIGNAL);
+			_kill_other_thread(other_thread);
 			break;
 		}
 	} while (!_poll_timeout_elapsed(start, task->timeout));
@@ -225,7 +222,25 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
 	atomic_fetch_add(task->ready_count, local_ready_count);
 }
 
+void _kill_other_thread(pthread_t other_thread) {
+	// Send our POLL_SIGNAL to the thread doing real_poll()
+	// This will terminate that thread, avoiding weird edge cases
+	// where the other thread would block indefinitely if it detects
+	// no changes (e.g. on a single fd), even if there were many events
+	// on the TSSX buffer in the main thread. Note: signals are a actually a
+	// process-wide concept. But because we installed a signal handler, what
+	// we can do is have the signal handler be invoked in the *other_thread*
+	// argument. If the disposition of the signal were a default (i.e. if we
+	// had installed no signal handler) one, such as TERMINATE for SIGQUIT,
+	// then that signal would be delivered to all threads, because all threads
+	// run in the same process
+	if (pthread_kill(other_thread, POLL_SIGNAL) != SUCCESS) {
+		throw("Error killing other thread");
+	}
+}
+
 bool _check_ready(PollEntry* entry, Operation operation) {
+	assert(entry != NULL);
 	if (_waiting_for(entry, operation)) {
 		// This here is the polymorphic call (see client/server-overrides)
 		if (_ready_for(entry->connection, operation)) {
@@ -242,6 +257,8 @@ bool _there_was_an_error(ready_count_t* ready_count) {
 }
 
 bool _waiting_for(PollEntry* entry, Operation operation) {
+	assert(entry != NULL);
+	assert(entry->poll_pointer != NULL);
 	return entry->poll_pointer->events & _operation_map[operation];
 }
 
@@ -291,9 +308,6 @@ int _restore_old_signal_action(struct sigaction* old_action) {
 
 void _poll_signal_handler(int signal_number) {
 	assert(signal_number == POLL_SIGNAL);
-#ifdef DEBUG
-	fprintf(stderr, "Received SIGUSR1 in poll\n");
-#endif
 }
 
 void _cleanup(Vector* tssx_fds, Vector* other_fds) {

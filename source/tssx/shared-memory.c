@@ -6,10 +6,10 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-#include "utility/utility.h"
 #include "tssx/buffer.h"
 #include "tssx/definitions.h"
 #include "tssx/shared-memory.h"
+#include "utility/utility.h"
 
 #define SHM_FLAGS IPC_CREAT | IPC_EXCL | 0666
 
