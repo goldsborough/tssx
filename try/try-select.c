@@ -16,8 +16,7 @@ void select_loop(int server_socket) {
 	highest_fd = server_socket;
 
 	while (true) {
-		fd_set read_set;
-		FD_COPY(&sockets, &read_set);
+	  fd_set read_set = sockets;
 
 		switch (select(highest_fd + 1, &read_set, NULL, NULL, &timeout)) {
 			case ERROR: throw("Error on select"); break;

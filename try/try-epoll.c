@@ -9,8 +9,8 @@ void epoll_loop(int server_socket) {
 	struct epoll_event events[MAXIMUM_NUMBER_OF_CONNECTIONS];
 	int epfd;
 
-	epfd = _create_epfd();
-	_register_socket(epfd, server_socket);
+	epfd = _request_epoll_fd();
+	_register_epoll_socket(epfd, server_socket);
 
 	while (true) {
 		int number_of_events;
@@ -21,14 +21,14 @@ void epoll_loop(int server_socket) {
 			case TIMEOUT: die("Timeout on epoll");
 		}
 
-		_handle_epoll_requests(epfd, events, number_of_events);
+		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
 	}
 }
 
-void _request_epoll_fd() {
+int _request_epoll_fd() {
 	int epfd;
 
-	if ((epfd = epoll_create1(EPOLL_CLOEXCEC)) == ERROR) {
+	if ((epfd = epoll_create1(EPOLL_CLOEXEC)) == ERROR) {
 		throw("Error requesting epoll master file descriptor");
 	}
 
@@ -50,6 +50,7 @@ void _remove_epoll_socket(int epfd, int socket_fd) {
 	if (epoll_ctl(epfd, EPOLL_CTL_DEL, socket_fd, NULL) == ERROR) {
 		throw("Error removing socket from epoll instance");
 	}
+	printf("Death to client %d\n", socket_fd);
 }
 
 void _accept_epoll_connections(int epfd, int server_socket) {

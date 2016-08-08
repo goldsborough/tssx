@@ -284,7 +284,7 @@ void _copy_set(fd_set* destination, const fd_set* source) {
 	if (source == NULL) {
 		FD_ZERO(destination);
 	} else {
-		FD_COPY(source, destination);
+	  *destination = *source;
 	}
 }
 
