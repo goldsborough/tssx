@@ -8,7 +8,7 @@ void throw(const char *message) {
 	exit(EXIT_FAILURE);
 }
 
-void terminate(const char *message) {
+void die(const char *message) {
 	print_error(message);
 	exit(EXIT_FAILURE);
 }
@@ -26,5 +26,18 @@ void set_cloexec_flag(int socket_fd) {
 	// Don't leak FDs
 	if (fcntl(socket_fd, F_SETFD, FD_CLOEXEC) == ERROR) {
 		throw("Error using fcntl for CLOEXEC flag");
+	}
+}
+
+void set_nonblocking(int socket_fd) {
+	int flags;
+
+	if ((flags = fcntl(socket_fd, F_GETFL)) == ERROR) {
+		throw("Error getting socket flags to unblock\n");
+	}
+
+	flags |= O_NONBLOCK;
+	if (fcntl(socket_fd, F_SETFL, flags) == ERROR) {
+		throw("Error setting socket flags to unblock\n");
 	}
 }

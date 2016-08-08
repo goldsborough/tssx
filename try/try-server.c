@@ -18,7 +18,11 @@ void connection_loop(int server_socket, Method method) {
 	switch (method) {
 		case SELECT: select_loop(server_socket); break;
 		case POLL: poll_loop(server_socket); break;
+#ifdef __APPLE__
+		case EPOLL: throw("epoll not supported on OS X");
+#else
 		case EPOLL: epoll_loop(server_socket); break;
+#endif
 	}
 }
 
@@ -31,6 +35,7 @@ int request_server_socket() {
 	}
 
 	set_cloexec_flag(server_socket);
+	set_nonblocking(server_socket);
 
 	return server_socket;
 }
@@ -53,8 +58,8 @@ void setup_server_socket(int server_socket) {
 		throw("Error binding to socket address");
 	}
 
-	// Enable listenging
-	if (listen(server_socket, BACKLOG) == ERROR) {
+	// Enable listening
+	if (listen(server_socket, SOMAXCONN) == ERROR) {
 		throw("Error listening on server socket");
 	}
 }

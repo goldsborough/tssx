@@ -21,20 +21,20 @@ void select_loop(int server_socket) {
 
 		switch (select(highest_fd + 1, &read_set, NULL, NULL, &timeout)) {
 			case ERROR: throw("Error on select"); break;
-			case TIMEOUT: terminate("Timeout on select\n"); break;
+			case TIMEOUT: die("Timeout on select\n"); break;
 		}
 
-		_accept_connections(&read_set, server_socket, &sockets, &highest_fd);
+		_accept_select_connections(&read_set, server_socket, &sockets, &highest_fd);
 		_handle_select_requests(&read_set, &sockets, highest_fd, server_socket);
 	}
 }
 
 /************************ PRIVATE ************************/
 
-void _accept_connections(const fd_set* read_set,
-												 int server_socket,
-												 fd_set* sockets,
-												 int* highest_fd) {
+void _accept_select_connections(const fd_set* read_set,
+																int server_socket,
+																fd_set* sockets,
+																int* highest_fd) {
 	int client_socket;
 
 	if (!FD_ISSET(server_socket, read_set)) return;
@@ -43,9 +43,7 @@ void _accept_connections(const fd_set* read_set,
 		throw("Error accepting connection on server side");
 	}
 
-	if (fcntl(client_socket, F_SETFL, O_NONBLOCK) == ERROR) {
-		throw("Error setting client socket non-blocking\n");
-	}
+	set_nonblocking(client_socket);
 
 	if (client_socket > *highest_fd) {
 		*highest_fd = client_socket;
@@ -73,7 +71,7 @@ void _handle_select_requests(const fd_set* read_set,
 		if ((code = read(fd, buffer, MESSAGE_SIZE)) == 0) {
 			FD_CLR(fd, sockets);
 		} else if (code < MESSAGE_SIZE) {
-			// throw("Error reading on server side");
+			throw("Error reading on server side");
 		} else {
 			if (write(fd, buffer, MESSAGE_SIZE) < MESSAGE_SIZE) {
 				throw("Error writing on server side");

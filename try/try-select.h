@@ -11,10 +11,10 @@ void select_loop(int server_socket);
 
 /************************ PRIVATE ************************/
 
-void _accept_connections(const fd_set* read_set,
-												 int server_socket,
-												 fd_set* sockets,
-												 int* highest_fd);
+void _accept_select_connections(const fd_set* read_set,
+																int server_socket,
+																fd_set* sockets,
+																int* highest_fd);
 
 void _handle_select_requests(const fd_set* read_set,
 														 fd_set* sockets,
