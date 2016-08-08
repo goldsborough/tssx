@@ -27,7 +27,9 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 
 	if (nfds == 0) return 0;
 
-	_partition(&tssx_fds, &other_fds, fds, nfds);
+	if (_partition(&tssx_fds, &other_fds, fds, nfds) == ERROR) {
+		return ERROR;
+	}
 
 	if (tssx_fds.size == 0) {
 		// We are only dealing with normal (non-tssx) fds
@@ -48,13 +50,17 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 
 const short _operation_map[2] = {POLLIN, POLLOUT};
 
-void _partition(Vector* tssx_fds,
-								Vector* other_fds,
-								struct pollfd fds[],
-								nfds_t number_of_fds) {
+int _partition(Vector* tssx_fds,
+							 Vector* other_fds,
+							 struct pollfd fds[],
+							 nfds_t number_of_fds) {
 	// Minimum capacity of 16 each
-	vector_setup(tssx_fds, 16, sizeof(PollEntry));
-	vector_setup(other_fds, 16, sizeof(struct pollfd));
+	if (vector_setup(tssx_fds, 16, sizeof(PollEntry)) == VECTOR_ERROR) {
+		return ERROR;
+	}
+	if (vector_setup(other_fds, 16, sizeof(struct pollfd)) == VECTOR_ERROR) {
+		return ERROR;
+	}
 
 	for (nfds_t index = 0; index < number_of_fds; ++index) {
 		Session* session = bridge_lookup(&bridge, fds[index].fd);
@@ -67,6 +73,8 @@ void _partition(Vector* tssx_fds,
 			vector_push_back(other_fds, &fds[index]);
 		}
 	}
+
+	return SUCCESS;
 }
 
 int _concurrent_poll(Vector* tssx_fds, Vector* other_fds, int timeout) {
@@ -311,6 +319,8 @@ void _poll_signal_handler(int signal_number) {
 }
 
 void _cleanup(Vector* tssx_fds, Vector* other_fds) {
+	printf("before cleanup\n");
 	vector_destroy(tssx_fds);
-	vector_destroy(other_fds);
+	// vector_destroy(other_fds);
+	printf("after cleanup\n");
 }

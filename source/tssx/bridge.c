@@ -12,7 +12,7 @@
 
 /******************** GLOBAL DATA ********************/
 
-Bridge bridge;
+Bridge bridge = BRIDGE_INITIALIZER;
 
 signal_handler_t old_sigint_handler = NULL;
 signal_handler_t old_sigterm_handler = NULL;
@@ -20,17 +20,19 @@ signal_handler_t old_sigabrt_handler = NULL;
 
 /******************** INTERFACE ********************/
 
-void bridge_setup(Bridge* bridge) {
+int bridge_setup(Bridge* bridge) {
 	assert(bridge != NULL);
 	assert(!bridge_is_initialized(bridge));
 
-	printf("?????????\n");
-
 	session_table_setup(&bridge->session_table);
 	_setup_exit_handling();
+
+	bridge->is_initialized = true;
+
+	return SUCCESS;
 }
 
-void bridge_destroy(Bridge* bridge) {
+int bridge_destroy(Bridge* bridge) {
 	assert(bridge != NULL);
 
 	// Invalidate (disconnect) all sessions
@@ -40,38 +42,57 @@ void bridge_destroy(Bridge* bridge) {
 	}
 
 	session_table_destroy(&bridge->session_table);
+
+	return SUCCESS;
 }
 
 bool bridge_is_initialized(const Bridge* bridge) {
-	return bridge != NULL;
+	assert(bridge != NULL);
+	return bridge->is_initialized;
 }
 
-void bridge_add_user(Bridge* bridge) {
+int bridge_add_user(Bridge* bridge) {
 	assert(bridge_is_initialized(bridge));
+
 	for (size_t index = 0; index < SESSION_TABLE_SIZE; ++index) {
 		Session* session = session_table_get(&bridge->session_table, index);
 		if (session_has_connection(session)) {
 			connection_add_user(session->connection);
 		}
 	}
+
+	return SUCCESS;
 }
 
-void bridge_insert(Bridge* bridge, int fd, Session* session) {
-	// First some sanity checks that this session we're assigning at is not valid
-	assert(!bridge_has_connection(bridge, fd));
+int bridge_insert(Bridge* bridge, int fd, Session* session) {
+	if (!bridge_is_initialized(bridge)) {
+		if (bridge_setup(bridge) == ERROR) {
+			return ERROR;
+		}
+	}
+
 	session_table_assign(&bridge->session_table, fd, session);
+
+	return SUCCESS;
 }
 
-void bridge_erase(Bridge* bridge, int fd) {
+int bridge_erase(Bridge* bridge, int fd) {
 	Session* session;
 	assert(bridge_is_initialized(bridge));
 
 	session = session_table_get(&bridge->session_table, fd);
 	session_invalidate(session);
+
+	return SUCCESS;
 }
 
 Session* bridge_lookup(Bridge* bridge, int fd) {
-	assert(bridge_is_initialized(bridge));
+	if (!bridge_is_initialized(bridge)) {
+		if (bridge_setup(bridge) == ERROR) {
+			return NULL;
+		}
+	}
+
 	return session_table_get(&bridge->session_table, fd);
 }
 
@@ -120,8 +141,6 @@ void _setup_signal_handler(int signal_number) {
 		throw("Error setting signal handler in bridge");
 	}
 
-	printf("Seting up signal handler for bridge\n");
-
 	if (signal_number == SIGINT) {
 		old_sigint_handler = old_action.sa_handler;
 	} else if (signal_number == SIGTERM) {
@@ -132,7 +151,6 @@ void _setup_signal_handler(int signal_number) {
 }
 
 void _bridge_signal_handler(int signal_number) {
-	printf("Handling %d in bridge\n", signal_number);
 	if (signal_number == SIGINT) {
 		_bridge_signal_handler_for(SIGINT, old_sigint_handler);
 	} else if (signal_number == SIGTERM) {

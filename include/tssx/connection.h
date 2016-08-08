@@ -2,6 +2,7 @@
 #define CONNECTION_H
 
 #include <stdatomic.h>
+#include <stdbool.h>
 
 /******************** DEFINITIONS ********************/
 
@@ -38,6 +39,8 @@ Connection* setup_connection(int segment_id,
 														 const struct ConnectionOptions* options);
 
 void disconnect(Connection* connection);
+
+bool connection_peer_died(Connection* connection);
 void connection_add_user(Connection* connection);
 
 /******************** PRIVATE ********************/

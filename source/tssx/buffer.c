@@ -12,10 +12,10 @@
 #include <stdio.h>
 #endif
 
-#include "utility/utility.h"
 #include "tssx/buffer.h"
 #include "tssx/definitions.h"
 #include "tssx/timeouts.h"
+#include "utility/utility.h"
 
 Buffer *create_buffer(void *shared_memory,
 											size_t requested_capacity,
@@ -35,6 +35,8 @@ size_t buffer_write(Buffer *buffer, const void *data, size_t bytes_to_write) {
 	if (buffer == NULL) return ERROR;
 	if (data == NULL) return ERROR;
 	if (bytes_to_write == 0) return 0;
+
+	printf("write\n");
 
 	// Block or return, depending on blocking configuration for the socket
 	// After the branch there is enough space to do the operation
@@ -71,6 +73,8 @@ size_t buffer_read(Buffer *buffer, void *data, size_t bytes_to_read) {
 	if (buffer == NULL) return ERROR;
 	if (data == NULL) return ERROR;
 	if (bytes_to_read == 0) return 0;
+
+	printf("read\n");
 
 	// Block or return, depending on blocking configuration for the socket
 	// After the branch there is enough space to do the operation
@@ -285,6 +289,7 @@ size_t _block_for_available_space(Buffer *buffer, Operation operation) {
 	start_time = _now();
 	size_t space = _get_available_space(buffer, operation);
 	while (space == 0) {
+		printf(".\n");
 		switch (_escalation_level(buffer, start_time, operation)) {
 			case LEVEL_ZERO: _pause(); break;
 			case LEVEL_ONE: sched_yield(); break;

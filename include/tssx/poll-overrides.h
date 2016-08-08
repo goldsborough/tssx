@@ -47,10 +47,10 @@ int poll(struct pollfd fds[], nfds_t number, int timeout);
 
 extern const short _operation_map[2];
 
-void _partition(struct Vector *tssx_fds,
-								struct Vector *other_fds,
-								struct pollfd fds[],
-								nfds_t number);
+int _partition(struct Vector *tssx_fds,
+							 struct Vector *other_fds,
+							 struct pollfd fds[],
+							 nfds_t number);
 
 PollEntry _create_entry(struct pollfd *poll_pointer);
 

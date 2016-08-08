@@ -11,6 +11,8 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
 	int client_socket;
 	int use_tssx;
 
+	printf("Real accept!\n");
+
 	if ((client_socket = real_accept(server_socket, address, length)) == ERROR) {
 		return ERROR;
 	}
@@ -55,6 +57,8 @@ ssize_t write(int key, const void *source, size_t requested_bytes) {
 int send_segment_id_to_client(int client_socket, Session *session) {
 	int return_code;
 
+	printf("real write\n");
+
 	// clang-format off
 	return_code = real_write(
 		client_socket,
@@ -79,19 +83,23 @@ int setup_tssx(int client_socket) {
 	options = options_from_socket(client_socket, SERVER);
 	session.connection = create_connection(&options);
 
+	printf("segment id: %d\n", session.connection->segment_id);
+
 	if (session.connection == NULL) {
 		print_error("Error allocating connection resources");
 		return ERROR;
 	}
+
+	printf("sending\n");
 
 	if (send_segment_id_to_client(client_socket, &session) == ERROR) {
 		print_error("Error sending segment ID to client");
 		return ERROR;
 	}
 
-	bridge_insert(&bridge, client_socket, &session);
+	printf("Inserted %d\n", client_socket);
 
-	return SUCCESS;
+	return bridge_insert(&bridge, client_socket, &session);
 }
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/
@@ -109,6 +117,7 @@ bool is_non_blocking(Connection *connection) {
 
 bool _ready_for(Connection *connection, Operation operation) {
 	if (operation == READ) {
+		if (connection_peer_died(connection)) return true;
 		return buffer_ready_for(connection->client_buffer, READ);
 	} else {
 		return buffer_ready_for(connection->server_buffer, WRITE);

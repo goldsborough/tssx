@@ -13,6 +13,8 @@
 
 #define SHM_FLAGS IPC_CREAT | IPC_EXCL | 0666
 
+#include <sys/time.h>
+
 int create_segment(int total_size) {
 	int id;
 
@@ -23,6 +25,9 @@ int create_segment(int total_size) {
 		}
 		// else just keep generating new keys (this one was taken)
 	}
+
+	printf("Created segment %d\n", id);
+	sleep(5);
 
 	return id;
 }

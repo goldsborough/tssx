@@ -8,8 +8,8 @@
 
 /******************** DEFINITIONS ********************/
 
-// Included from reverse-map to avoid duplicate definitions
-// typedef int key_t;
+#define BRIDGE_INITIALIZER \
+	{ false }
 
 struct Session;
 
@@ -17,6 +17,7 @@ struct Session;
 
 // clang-format off
 typedef struct Bridge {
+  bool is_initialized;
   SessionTable session_table;
 } Bridge;
 // clang-format on
@@ -25,15 +26,15 @@ extern Bridge bridge;
 
 /******************** INTERFACE ********************/
 
-void bridge_setup(Bridge* bridge);
-void bridge_destroy(Bridge* bridge);
+int bridge_setup(Bridge* bridge);
+int bridge_destroy(Bridge* bridge);
 
 bool bridge_is_initialized(const Bridge* bridge);
 
-void bridge_add_user(Bridge* bridge);
+int bridge_add_user(Bridge* bridge);
 
-void bridge_insert(Bridge* bridge, int fd, struct Session* session);
-void bridge_erase(Bridge* bridge, int fd);
+int bridge_insert(Bridge* bridge, int fd, struct Session* session);
+int bridge_erase(Bridge* bridge, int fd);
 
 struct Session* bridge_lookup(Bridge* bridge, int fd);
 bool bridge_has_connection(Bridge* bridge, int fd);

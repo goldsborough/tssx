@@ -18,9 +18,17 @@ void select_loop(int server_socket) {
 	while (true) {
 		fd_set read_set = sockets;
 
+		printf("4\n");
+
 		switch (select(highest_fd + 1, &read_set, NULL, NULL, &timeout)) {
 			case ERROR: throw("Error on select"); break;
 			case TIMEOUT: die("Timeout on select\n"); break;
+		}
+
+		for (int i = server_socket; i < highest_fd + 1; ++i) {
+			if (FD_ISSET(i, &read_set)) {
+				printf("%d is set\n", i);
+			}
 		}
 
 		_accept_select_connections(&read_set, server_socket, &sockets, &highest_fd);
@@ -36,7 +44,11 @@ void _accept_select_connections(const fd_set* read_set,
 																int* highest_fd) {
 	int client_socket;
 
+	printf("Server socket: %d\n", FD_ISSET(server_socket, read_set));
+
 	if (!FD_ISSET(server_socket, read_set)) return;
+
+	printf("Someone's knocking ...\n");
 
 	if ((client_socket = accept(server_socket, NULL, NULL)) == ERROR) {
 		throw("Error accepting connection on server side");
@@ -66,12 +78,17 @@ void _handle_select_requests(const fd_set* read_set,
 		if (fd == server_socket) continue;
 		if (!FD_ISSET(fd, read_set)) continue;
 
+		printf("1\n");
+
 		// read()/recv() returns zero when the peer disconnects
 		if ((code = read(fd, buffer, MESSAGE_SIZE)) == 0) {
 			FD_CLR(fd, sockets);
+			close(fd);
+			printf("%d has died ...\n", fd);
 		} else if (code < MESSAGE_SIZE) {
 			throw("Error reading on server side");
 		} else {
+			printf("2\n");
 			if (write(fd, buffer, MESSAGE_SIZE) < MESSAGE_SIZE) {
 				throw("Error writing on server side");
 			}

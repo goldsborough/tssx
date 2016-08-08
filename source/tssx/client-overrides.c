@@ -4,10 +4,10 @@
 
 #include <sys/un.h>
 
-#include "utility/sockets.h"
 #include "tssx/client-overrides.h"
 #include "tssx/common-overrides.h"
 #include "tssx/poll-overrides.h"
+#include "utility/sockets.h"
 
 int connect(int fd, const sockaddr* address, socklen_t length) {
 	if (real_connect(fd, address, length) == ERROR) {
@@ -75,7 +75,7 @@ int read_segment_id_from_server(int client_socket) {
 int setup_tssx(int fd) {
 	int segment_id;
 	int use_tssx;
-	Session* session;
+	Session session;
 	ConnectionOptions options;
 
 	if ((use_tssx = check_tssx_usage(fd, CLIENT)) == ERROR) {
@@ -88,19 +88,21 @@ int setup_tssx(int fd) {
 	// Read the options first
 	options = options_from_socket(fd, CLIENT);
 
+	printf("Waiting for ID\n");
+
 	segment_id = read_segment_id_from_server(fd);
 	if (segment_id == ERROR) {
 		return ERROR;
 	}
 
-	session = bridge_lookup(&bridge, fd);
+	printf("Segment id: %d\n", segment_id);
 
-	session->connection = setup_connection(segment_id, &options);
-	if (session->connection == NULL) {
+	session.connection = setup_connection(segment_id, &options);
+	if (session.connection == NULL) {
 		return ERROR;
 	}
 
-	return SUCCESS;
+	return bridge_insert(&bridge, fd, &session);
 }
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/
@@ -118,6 +120,7 @@ bool is_non_blocking(Connection* connection) {
 
 bool _ready_for(Connection* connection, Operation operation) {
 	if (operation == READ) {
+		if (connection_peer_died(connection)) return true;
 		return buffer_ready_for(connection->server_buffer, READ);
 	} else {
 		return buffer_ready_for(connection->client_buffer, WRITE);

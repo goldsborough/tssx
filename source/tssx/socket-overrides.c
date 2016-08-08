@@ -8,11 +8,11 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "utility/utility.h"
 #include "tssx/bridge.h"
 #include "tssx/connection.h"
 #include "tssx/session.h"
 #include "tssx/socket-overrides.h"
+#include "utility/utility.h"
 
 /******************** REAL FUNCTIONS ********************/
 

@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <time.h>
 
-#include "utility/sockets.h"
-#include "utility/utility.h"
 #include "tssx/buffer.h"
 #include "tssx/connection-options.h"
 #include "tssx/connection.h"
 #include "tssx/hashtable.h"
 #include "tssx/shared-memory.h"
+#include "utility/sockets.h"
+#include "utility/utility.h"
 
 /*************** PUBLIC **************/
 
@@ -59,6 +59,10 @@ Connection* setup_connection(int segment_id, const ConnectionOptions* options) {
 void connection_add_user(Connection* connection) {
 	assert(connection != NULL);
 	atomic_fetch_add(connection->open_count, 1);
+}
+
+bool connection_peer_died(Connection* connection) {
+	return atomic_load(connection->open_count) == 1;
 }
 
 void disconnect(Connection* connection) {

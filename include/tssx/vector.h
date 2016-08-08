@@ -1,9 +1,9 @@
 #ifndef VECTOR_H
 #define VECTOR_H
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,7 +38,9 @@ typedef struct Iterator {
 /***** METHODS *****/
 
 /* Constructor */
-static inline int vector_setup(Vector* vector, size_t capacity, size_t element_size);
+static inline int vector_setup(Vector* vector,
+															 size_t capacity,
+															 size_t element_size);
 
 /* Copy Constructor */
 static inline int vector_copy(Vector* destination, Vector* source);
@@ -121,7 +123,8 @@ static inline bool _vector_should_shrink(Vector* vector);
 
 static inline size_t _vector_free_bytes(const Vector* vector);
 static inline void* _vector_offset(Vector* vector, size_t index);
-static inline const void* _vector_const_offset(const Vector* vector, size_t index);
+static inline const void* _vector_const_offset(const Vector* vector,
+																							 size_t index);
 
 static inline void _vector_assign(Vector* vector, size_t index, void* element);
 
@@ -135,7 +138,9 @@ static inline void _vector_swap(size_t* first, size_t* second);
 
 /***** IMPLEMENTATION *****/
 
-static inline int vector_setup(Vector* vector, size_t capacity, size_t element_size) {
+static inline int vector_setup(Vector* vector,
+															 size_t capacity,
+															 size_t element_size) {
 	assert(vector != NULL);
 
 	if (vector == NULL) return VECTOR_ERROR;
@@ -143,7 +148,7 @@ static inline int vector_setup(Vector* vector, size_t capacity, size_t element_s
 	vector->size = 0;
 	vector->capacity = MAX(VECTOR_MINIMUM_CAPACITY, capacity);
 	vector->element_size = element_size;
-	vector->data = malloc(vector->capacity * element_size);
+	vector->data = calloc(vector->capacity, element_size);
 
 	return vector->data == NULL ? VECTOR_ERROR : VECTOR_SUCCESS;
 }
@@ -528,7 +533,8 @@ static inline void* _vector_offset(Vector* vector, size_t index) {
 	return vector->data + (index * vector->element_size);
 }
 
-static inline const void* _vector_const_offset(const Vector* vector, size_t index) {
+static inline const void* _vector_const_offset(const Vector* vector,
+																							 size_t index) {
 	return vector->data + (index * vector->element_size);
 }
 
@@ -583,7 +589,7 @@ static inline void _vector_move_left(Vector* vector, size_t index) {
 
 static inline int _vector_adjust_capacity(Vector* vector) {
 	return _vector_reallocate(vector,
-									  MAX(1, vector->size * VECTOR_GROWTH_FACTOR));
+														MAX(1, vector->size * VECTOR_GROWTH_FACTOR));
 }
 
 static inline int _vector_reallocate(Vector* vector, size_t new_capacity) {
@@ -608,7 +614,7 @@ static inline int _vector_reallocate(Vector* vector, size_t new_capacity) {
 	}
 
 #ifdef __STDC_LIB_EXT1__
-		/* clang-format off */
+	/* clang-format off */
 	if (memcpy_s(vector->data,
 							 new_capacity_in_bytes,
 							 old,
