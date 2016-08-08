@@ -5,7 +5,7 @@
 #include <dlfcn.h>
 #include <stdbool.h>
 
-#include "common/utility.h"
+#include "utility/utility.h"
 #include "tssx/bridge.h"
 #include "tssx/buffer.h"
 #include "tssx/connection-options.h"
