@@ -4,10 +4,10 @@
 #include <stdio.h>
 
 
-#include "utility/sockets.h"
 #include "tssx/buffer.h"
 #include "tssx/connection-options.h"
 #include "tssx/connection.h"
+#include "utility/sockets.h"
 
 const ConnectionOptions DEFAULT_OPTIONS =
 		DEFAULT_CONNECTION_OPTIONS_INITIALIZER;

@@ -1,9 +1,9 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ipc.h>
 #include <sys/time.h>
 #include <time.h>
-#include <assert.h>
 
 #define __USE_GNU
 #include <pthread.h>

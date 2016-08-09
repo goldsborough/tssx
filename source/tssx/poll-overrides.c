@@ -84,19 +84,11 @@ int _partition(Vector* tssx_fds,
 }
 
 int _concurrent_poll(Vector* tssx_fds, Vector* other_fds, int timeout) {
-	PollTask other_task;
-	PollTask tssx_task;
-	ready_count_t ready_count;
+	ready_count_t ready_count = ATOMIC_VAR_INIT(0);
 	struct sigaction old_action;
 	pthread_t other_thread;
-
-	atomic_init(&ready_count, 0);
-	_setup_tasks(&other_task,
-							 &tssx_task,
-							 other_fds,
-							 tssx_fds,
-							 timeout,
-							 &ready_count);
+	PollTask other_task = {other_fds, timeout, &ready_count};
+	PollTask tssx_task = {tssx_task, timeout, &ready_count};
 
 	if ((_install_poll_signal_handler(&old_action)) == ERROR) {
 		return ERROR;
@@ -137,22 +129,6 @@ int _start_other_poll_thread(pthread_t* poll_thread, PollTask* task) {
 	return SUCCESS;
 }
 
-void _setup_tasks(PollTask* other_task,
-									PollTask* tssx_task,
-									Vector* other_fds,
-									Vector* tssx_fds,
-									int timeout,
-									ready_count_t* ready_count) {
-	// Setup the tasks
-	other_task->fds = other_fds;
-	other_task->timeout = timeout;
-	other_task->ready_count = ready_count;
-
-	tssx_task->fds = tssx_fds;
-	tssx_task->timeout = timeout;
-	tssx_task->ready_count = ready_count;
-}
-
 void _other_poll(PollTask* task) {
 	int local_ready_count = 0;
 	struct pollfd* raw = task->fds->data;
@@ -177,8 +153,6 @@ void _other_poll(PollTask* task) {
 
 	// Either there was a timeout (+= 0), or some FDs are ready
 	atomic_fetch_add(task->ready_count, local_ready_count);
-
-	pthread_exit(EXIT_SUCCESS);
 }
 
 int _simple_tssx_poll(Vector* tssx_fds, int timeout) {
@@ -203,6 +177,7 @@ int _simple_tssx_poll(Vector* tssx_fds, int timeout) {
 }
 
 void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
+	size_t global_ready_count;
 	size_t start = current_milliseconds();
 	size_t local_ready_count = 0;
 
@@ -221,7 +196,7 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
 			}
 		}
 
-		size_t global_ready_count = atomic_load(task->ready_count);
+		global_ready_count = atomic_load(task->ready_count);
 
 		// Don't touch if there was an error in the other thread
 		if (global_ready_count == ERROR) return;
@@ -236,22 +211,6 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t other_thread) {
 	atomic_fetch_add(task->ready_count, local_ready_count);
 }
 
-void _kill_other_thread(pthread_t other_thread) {
-	// Send our POLL_SIGNAL to the thread doing real_poll()
-	// This will terminate that thread, avoiding weird edge cases
-	// where the other thread would block indefinitely if it detects
-	// no changes (e.g. on a single fd), even if there were many events
-	// on the TSSX buffer in the main thread. Note: signals are a actually a
-	// process-wide concept. But because we installed a signal handler, what
-	// we can do is have the signal handler be invoked in the *other_thread*
-	// argument. If the disposition of the signal were a default (i.e. if we
-	// had installed no signal handler) one, such as TERMINATE for SIGQUIT,
-	// then that signal would be delivered to all threads, because all threads
-	// run in the same process
-	if (pthread_kill(other_thread, POLL_SIGNAL) != SUCCESS) {
-		throw("Error killing other thread");
-	}
-}
 
 bool _check_ready(PollEntry* entry, Operation operation) {
 	assert(entry != NULL);
@@ -266,10 +225,6 @@ bool _check_ready(PollEntry* entry, Operation operation) {
 	return false;
 }
 
-bool _there_was_an_error(ready_count_t* ready_count) {
-	return atomic_load(ready_count) == ERROR;
-}
-
 bool _waiting_for(PollEntry* entry, Operation operation) {
 	assert(entry != NULL);
 	assert(entry->poll_pointer != NULL);
@@ -278,50 +233,6 @@ bool _waiting_for(PollEntry* entry, Operation operation) {
 
 bool _tell_that_ready_for(PollEntry* entry, Operation operation) {
 	return entry->poll_pointer->revents |= _operation_map[operation];
-}
-
-bool _poll_timeout_elapsed(size_t start, int timeout) {
-	if (timeout == BLOCK_FOREVER) return false;
-	if (timeout == DONT_BLOCK) return true;
-
-	return (current_milliseconds() - start) > timeout;
-}
-
-int _install_poll_signal_handler(struct sigaction* old_action) {
-	struct sigaction signal_action;
-
-	// Set our function as the signal handling function
-	signal_action.sa_handler = _poll_signal_handler;
-
-	// !!!!!!!!!!!!!!!!!!!!!!!!!!!! IMPORTANT !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	// Do not set SA_RESTART! This is precisely the point of all of this!
-	// By NOT (NOT NOT NOT) setting SA_RESTART, any interrupted syscall will
-	// NOT (NOT NOT NOT) restart automatically. Rather, it will fail with exit
-	// code  EINTR, which is precisely what we want.
-	signal_action.sa_flags = 0;
-
-	// Don't block any other signals during our exception handling
-	sigemptyset(&signal_action.sa_mask);
-
-	if (sigaction(POLL_SIGNAL, &signal_action, old_action) == ERROR) {
-		print_error("Error setting signal handler for poll");
-		return ERROR;
-	}
-
-	return SUCCESS;
-}
-
-int _restore_old_signal_action(struct sigaction* old_action) {
-	if (sigaction(POLL_SIGNAL, old_action, NULL) == ERROR) {
-		print_error("Error restoring old signal handler for poll");
-		return ERROR;
-	}
-
-	return SUCCESS;
-}
-
-void _poll_signal_handler(int signal_number) {
-	assert(signal_number == POLL_SIGNAL);
 }
 
 void _cleanup(Vector* tssx_fds, Vector* other_fds) {

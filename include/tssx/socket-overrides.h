@@ -90,13 +90,13 @@ int real_close(int fd);
 
 /******************** COMMON OVERRIDES ********************/
 
-int getsockopt(int key,
+int getsockopt(int fd,
 							 int level,
 							 int option_name,
 							 void* restrict option_value,
 							 socklen_t* restrict option_len);
 
-int setsockopt(int key,
+int setsockopt(int fd,
 							 int level,
 							 int option_name,
 							 const void* option_value,

@@ -111,14 +111,14 @@ int real_getsockname(int fd, struct sockaddr* addr, socklen_t* addrlen) {
 
 /******************** COMMON OVERRIDES ********************/
 
-int getsockopt(int key,
+int getsockopt(int fd,
 							 int level,
 							 int option_name,
 							 void* restrict option_value,
 							 socklen_t* restrict option_len) {
 	// clang-format off
 	return real_getsockopt(
-			key,
+			fd,
       level,
       option_name,
       option_value,
@@ -127,18 +127,18 @@ int getsockopt(int key,
 	// clang-format on
 }
 
-int getsockname(int key, struct sockaddr* addr, socklen_t* addrlen) {
-	return real_getsockname(key, addr, addrlen);
+int getsockname(int fd, struct sockaddr* addr, socklen_t* addrlen) {
+	return real_getsockname(fd, addr, addrlen);
 }
 
-int setsockopt(int key,
+int setsockopt(int fd,
 							 int level,
 							 int option_name,
 							 const void* option_value,
 							 socklen_t option_len) {
 	// clang-format off
   return real_setsockopt(
-     key,
+     fd,
      level,
      option_name,
      option_value,
@@ -147,9 +147,14 @@ int setsockopt(int key,
   // clang-fomat pm
 }
 
-int close(int key) {
-	bridge_erase(&bridge, key);
-	return real_close(key);
+int close(int fd) {
+  // These two are definitely mutually exclusive
+  if (has_epoll_instance_associated(fd)) {
+    close_epoll_instance(fd);
+  } else {
+    bridge_erase(&bridge, fd);
+  }
+	return real_close(fd);
 }
 
 ssize_t send(int fd, const void* buffer, size_t length, int flags) {
