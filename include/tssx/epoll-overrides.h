@@ -79,13 +79,17 @@ int epoll_pwait(int epfd,
 								int timeout,
 								const sigset_t *sigmask);
 
-/******************** PRIVATE ********************/
+/******************** PRIVATE DEFINITIONS ********************/
 
 #define SUPPORTED_OPERATIONS 3
 
 extern epoll_operation_t _supported_operations[SUPPORTED_OPERATIONS];
 extern EpollInstance _epoll_instances[NUMBER_OF_EPOLL_INSTANCES];
 extern bool _epoll_instances_are_initialized;
+
+extern pthread_mutex_t _epoll_lock;
+
+/******************** PRIVATE ********************/
 
 void _setup_epoll_instances();
 
@@ -157,5 +161,7 @@ bool _check_for_hangup(EpollEntry *entry, struct epoll_event *event);
 
 Operation _convert_operation(size_t operation_index);
 void _invalid_argument_exception();
+
+void _destroy_epoll_lock();
 
 #endif /* EPOLL_OVERRIDES_H */

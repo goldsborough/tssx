@@ -14,11 +14,6 @@
 #include "tssx/vector.h"
 #include "utility/common.h"
 
-/******************** GLOBAL DATA ********************/
-
-EpollInstance _epoll_instances[NUMBER_OF_EPOLL_INSTANCES];
-bool _epoll_instances_are_initialized = false;
-
 /******************** REAL FUNCTIONS ********************/
 
 int real_epoll_create(int size) {
@@ -71,7 +66,9 @@ int epoll_create1(int flags) {
 	}
 
 	if (!_epoll_instances_are_initialized) {
-		_setup_epoll_instances();
+		if (_setup_epoll_instances() == ERROR) {
+			return ERROR;
+		}
 	}
 
 	assert(!has_epoll_instance_associated(epfd));
@@ -126,7 +123,32 @@ int epoll_pwait(int epfd,
 								int number_of_events,
 								int timeout,
 								const sigset_t *sigmask) {
-	return 123456;
+	sigset_t original_mask;
+	int event_count;
+
+	if (sigmask == NULL) {
+		return epoll_wait(efpd, events, number_of_events, timeout);
+	}
+
+	if (pthread_mutex_lock(&_epoll_lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_sigmask(SIG_SETMASK, sigmask, &original_mask) != SUCCESS) {
+		return ERROR;
+	}
+
+	event_count = epoll_wait(efpd, events, number_of_events, timeout);
+
+	if (pthread_sigmask(SIG_SETMASK, sigmask, &original_mask) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_mutex_unlock(&_epoll_lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	return event_count;
 }
 
 bool has_epoll_instance_associated(int epfd) {
@@ -158,7 +180,7 @@ int close_epoll_instance(int epfd) {
 	return SUCCESS;
 }
 
-/******************** PRIVATE ********************/
+/******************** PRIVATE DEFINITIONS ********************/
 
 // clang-format off
 epoll_operation_t _supported_operations[SUPPORTED_OPERATIONS] = {
@@ -168,7 +190,14 @@ epoll_operation_t _supported_operations[SUPPORTED_OPERATIONS] = {
 };
 // clang-format on
 
-void _setup_epoll_instances() {
+EpollInstance _epoll_instances[NUMBER_OF_EPOLL_INSTANCES];
+bool _epoll_instances_are_initialized = false;
+
+pthread_mutex_t _epoll_lock = PTHREAD_MUTEX_INITIALIZER;
+
+/******************** PRIVATE ********************/
+
+int _setup_epoll_instances() {
 	assert(!_epoll_instances_are_initialized);
 
 	for (size_t instance = 0; instance <= NUMBER_OF_EPOLL_INSTANCES; ++instance) {
@@ -176,7 +205,14 @@ void _setup_epoll_instances() {
 		_epoll_instances[instance].normal_count = 0;
 	}
 
+	if (atexit(_destroy_epoll_lock) == ERROR) {
+		print_error("Error registering destructor with atexit() in epoll\n");
+		return ERROR;
+	}
+
 	_epoll_instances_are_initialized = true;
+
+	return SUCCESS;
 }
 
 int _epoll_other_tssx_operation(int epfd,
@@ -600,4 +636,10 @@ bool _epoll_event_registered(const EpollEntry *entry, size_t operation_index) {
 void _invalid_argument_exception() {
 	errno = EINVAL;
 	print_error("Descriptor was not registered with epoll instance\n");
+}
+
+void _destroy_epoll_lock() {
+	if (pthread_mutex_destroy(&_epoll_lock) != SUCCESS) {
+		print_error("Error destroying mutex\n");
+	}
 }
