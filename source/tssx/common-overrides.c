@@ -77,10 +77,13 @@ ssize_t connection_read(int key,
 												size_t requested_bytes,
 												int which_buffer) {
 	Session* session;
-
 	session = bridge_lookup(&bridge, key);
 	if (session_has_connection(session)) {
-		if (connection_peer_died(session->connection)) return 0;
+		// The problem is that the server is too quick to read and the client hasn't
+		// incremented the count yet. so maybe the server should set the count to 2
+
+
+		// if (connection_peer_died(session->connection)) return 0;
 		// clang-format off
     return buffer_read(
         get_buffer(session->connection, which_buffer),
