@@ -20,7 +20,7 @@ void select_loop(int server_socket) {
 
 		switch (select(highest_fd + 1, &read_set, NULL, NULL, &timeout)) {
 			case ERROR: throw("Error on select"); break;
-			case TIMEOUT: die("Timeout on select\n"); break;
+			case 0: die("Timeout on select\n"); break;
 		}
 
 		_accept_select_connections(&read_set, server_socket, &sockets, &highest_fd);

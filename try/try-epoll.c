@@ -14,13 +14,15 @@ void epoll_loop(int server_socket) {
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
 
+	printf("1\n");
+
 	while (true) {
 		int number_of_events;
 
 		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
-			case TIMEOUT: die("Timeout on epoll");
+			case 0: die("Timeout on epoll");
 		}
 		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
 	}

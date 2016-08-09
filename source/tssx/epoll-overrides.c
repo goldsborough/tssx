@@ -60,7 +60,7 @@ int epoll_create(int size) {
 int epoll_create1(int flags) {
 	int epfd;
 
-	if ((epfd = epoll_create1(flags)) == ERROR) {
+	if ((epfd = real_epoll_create1(flags)) == ERROR) {
 		return ERROR;
 	}
 
@@ -430,7 +430,7 @@ int _concurrent_epoll_wait(int epfd,
 	event_count_t event_count = ATOMIC_VAR_INIT(0);
 	struct epoll_event *tssx_events;
 	size_t tssx_event_count;
-
+	
 	// clang-format off
   EpollTask normal_task = {
     epfd, events, number_of_events, timeout, &event_count, 0
@@ -535,11 +535,13 @@ int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 			++event_count;
 		}
 
-		VECTOR_FOR_EACH(&instance->entries, iterator) {
-			EpollEntry *entry = iterator_get(&iterator);
-			if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
-				++event_count;
-			}
+		if (instance->tssx_count > 1) {
+		  VECTOR_FOR_EACH(&instance->entries, iterator) {
+			  EpollEntry *entry = iterator_get(&iterator);
+			  if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
+				  ++event_count;
+			  }
+		  }
 		}
 
 		shared_event_count_value = atomic_load(shared_event_count);

@@ -17,7 +17,7 @@ void poll_loop(int server_socket) {
 	while (true) {
 		switch (poll(poll_entries, number_of_connections, TIMEOUT)) {
 			case ERROR: throw("Error on poll"); break;
-			case TIMEOUT: die("Timeout on poll\n"); break;
+			case 0: die("Timeout on poll\n"); break;
 		}
 
 		_accept_poll_connections(poll_entries,
