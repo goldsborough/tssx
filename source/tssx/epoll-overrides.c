@@ -6,12 +6,11 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+#include "tssx/connection.h"
 #include "tssx/bridge.h"
 #include "tssx/definitions.h"
 #include "tssx/epoll-overrides.h"
-#include "tssx/poll-overrides.h"
 #include "tssx/session.h"
-#include "tssx/vector.h"
 #include "utility/common.h"
 
 /******************** REAL FUNCTIONS ********************/

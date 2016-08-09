@@ -6,6 +6,7 @@
 #include <sys/epoll.h>
 
 #include "tssx/common-poll-overrides.h"
+#include "tssx/vector.h"
 
 /******************** DEFINITIONS ********************/
 
@@ -27,11 +28,13 @@ typedef int (*real_epoll_pwait_t)
 
 /******************** STRUCTURES ********************/
 
+struct Connection;
+
 typedef int epoll_operation_t;
 
 typedef struct EpollEntry {
 	int fd;
-	struct poll_event event;
+	struct epoll_event event;
 	Connection *connection;
 } EpollEntry;
 
@@ -95,7 +98,7 @@ extern pthread_mutex_t _epoll_lock;
 
 /******************** PRIVATE ********************/
 
-void _setup_epoll_instances();
+int _setup_epoll_instances();
 
 int _epoll_other_tssx_operation(int epfd,
 																int operation,
