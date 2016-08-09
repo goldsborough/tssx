@@ -203,7 +203,7 @@ pthread_mutex_t _epoll_lock = PTHREAD_MUTEX_INITIALIZER;
 int _setup_epoll_instances() {
 	assert(!_epoll_instances_are_initialized);
 
-	for (size_t instance = 0; instance <= NUMBER_OF_EPOLL_INSTANCES; ++instance) {
+	for (size_t instance = 0; instance < NUMBER_OF_EPOLL_INSTANCES; ++instance) {
 		_epoll_instances[instance].tssx_count = 0;
 		_epoll_instances[instance].normal_count = 0;
 	}
@@ -246,7 +246,7 @@ int _epoll_tssx_control_operation(int epfd,
      return _epoll_update_events(instance, fd, event);
      break;
 		case EPOLL_CTL_DEL:
-			return _epoll_erase_from_instance(instance, fd, event);
+			return _epoll_erase_from_instance(instance, fd);
 			break;
 		default:
 			errno = EINVAL;
@@ -449,7 +449,7 @@ int _concurrent_epoll_wait(int epfd,
 
 	// clang-format off
 	tssx_event_count = _concurrent_tssx_epoll_wait(
-      _epoll_instances[epfd],
+      &_epoll_instances[epfd],
       tssx_events,
       number_of_events,
       normal_thread,
@@ -474,7 +474,7 @@ int _concurrent_epoll_wait(int epfd,
 	return atomic_load(&event_count);
 }
 
-int _start_normal_poll_thread(pthread_t *normal_thread, EpollTask *task) {
+int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task) {
 	thread_function_t function = (thread_function_t)_normal_epoll_wait;
 
 	if (pthread_create(normal_thread, NULL, function, task) != SUCCESS) {
@@ -513,7 +513,7 @@ void _normal_epoll_wait(EpollTask *task) {
 	atomic_fetch_add(task->shared_event_count, task->event_count);
 }
 
-void _concurrent_tssx_epoll_wait(EpollInstance *instance,
+int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 																 struct epoll_event *events,
 																 size_t number_of_events,
 																 pthread_t normal_thread,
@@ -545,7 +545,7 @@ void _concurrent_tssx_epoll_wait(EpollInstance *instance,
 		shared_event_count_value = atomic_load(shared_event_count);
 
 		// Don't touch if there was an error in the normal thread
-		if (shared_event_count_value == ERROR) return;
+		if (shared_event_count_value == ERROR) return ERROR;
 		if (shared_event_count_value > 0) break;
 		if (event_count > 0) {
 			_kill_normal_thread(normal_thread);
@@ -557,6 +557,8 @@ void _concurrent_tssx_epoll_wait(EpollInstance *instance,
 	// Add whatever we have (zero if the
 	// timeout elapsed or normal thread had activity)
 	atomic_fetch_add(shared_event_count, event_count);
+
+	return event_count;
 }
 
 int _tssx_epoll_wait_for_single_entry(EpollEntry *entry,
@@ -582,7 +584,7 @@ bool _check_epoll_entry(EpollEntry *entry,
 
 	if (event_count == number_of_events) return false;
 
-	event = events[event_count];
+	event = &events[event_count];
 	event->events = 0;
 	activity = false;
 

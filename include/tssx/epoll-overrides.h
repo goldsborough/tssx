@@ -3,7 +3,7 @@
 
 #include <signal.h>
 #include <stddef.h>
-// #include <sys/epoll.h>
+#include <sys/epoll.h>
 
 #include "tssx/common-poll-overrides.h"
 #include "tssx/vector.h"
@@ -153,7 +153,7 @@ int _concurrent_epoll_wait(int epfd,
 
 int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task);
 void _normal_epoll_wait(EpollTask *task);
-void _concurrent_tssx_epoll_wait(EpollInstance *instance,
+int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 																 struct epoll_event *events,
 																 size_t number_of_events,
 																 pthread_t normal_thread,
