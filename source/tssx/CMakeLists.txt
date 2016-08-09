@@ -23,7 +23,7 @@ set(TSSX_COMMON_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/common-poll-overrides.c
 )
 
-if(NOT APPLE)
+if(APPLE)
   set(TSSX_COMMON_SOURCES
     ${TSSX_COMMON_SOURCES}
     ${CMAKE_CURRENT_SOURCE_DIR}/epoll-overrides.c

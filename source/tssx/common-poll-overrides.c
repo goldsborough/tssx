@@ -7,8 +7,8 @@
 #include "tssx/connection.h"
 #include "utility/utility.h"
 
-bool _there_was_an_error(ready_count_t* ready_count) {
-	return atomic_load(ready_count) == ERROR;
+bool _there_was_an_error(event_count_t* event_count) {
+	return atomic_load(event_count) == ERROR;
 }
 
 
@@ -56,19 +56,19 @@ void _poll_signal_handler(int signal_number) {
 	assert(signal_number == POLL_SIGNAL);
 }
 
-void _kill_other_thread(pthread_t other_thread) {
+void _kill_normal_thread(pthread_t normal_thread) {
 	// Send our POLL_SIGNAL to the thread doing real_poll()
 	// This will terminate that thread, avoiding weird edge cases
-	// where the other thread would block indefinitely if it detects
+	// where the normal thread would block indefinitely if it detects
 	// no changes (e.g. on a single fd), even if there were many events
 	// on the TSSX buffer in the main thread. Note: signals are a actually a
 	// process-wide concept. But because we installed a signal handler, what
-	// we can do is have the signal handler be invoked in the *other_thread*
+	// we can do is have the signal handler be invoked in the *normal_thread*
 	// argument. If the disposition of the signal were a default (i.e. if we
 	// had installed no signal handler) one, such as TERMINATE for SIGQUIT,
 	// then that signal would be delivered to all threads, because all threads
 	// run in the same process
-	if (pthread_kill(other_thread, POLL_SIGNAL) != SUCCESS) {
-		throw("Error killing other thread");
+	if (pthread_kill(normal_thread, POLL_SIGNAL) != SUCCESS) {
+		throw("Error killing normal thread");
 	}
 }

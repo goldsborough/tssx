@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#include "tssx/connection.h"
 #include "tssx/bridge.h"
+#include "tssx/connection.h"
 #include "tssx/definitions.h"
 #include "tssx/epoll-overrides.h"
 #include "tssx/session.h"
@@ -87,9 +87,9 @@ int epoll_ctl(int epfd, int operation, int fd, struct epoll_event *event) {
 
 	session = bridge_lookup(&bridge, fd);
 	if (session_has_connection(session)) {
-		return _epoll_tssx_operation(epfd, operation, fd, event, session);
+		return _epoll_tssx_control_operation(epfd, operation, fd, event, session);
 	} else {
-		return _epoll_other_operation(epfd, operation, fd, event);
+		return _epoll_normal_control_operation(epfd, operation, fd, event);
 	}
 }
 
@@ -106,14 +106,14 @@ int epoll_wait(int epfd,
 		return ERROR;
 	}
 
-	instance = _epoll_instances[epfd];
+	instance = &_epoll_instances[epfd];
 
 	if (instance->normal_count == 0) {
 		return _simple_tssx_epoll_wait(instance, events, number_of_events, timeout);
 	} else if (instance->tssx_count == 0) {
 		return real_epoll_wait(epfd, events, number_of_events, timeout);
 	} else {
-		return _concurrent_tssx_epoll_wait(epfd, events, number_of_events, timeout);
+		return _concurrent_epoll_wait(epfd, events, number_of_events, timeout);
 	}
 }
 
@@ -126,7 +126,7 @@ int epoll_pwait(int epfd,
 	int event_count;
 
 	if (sigmask == NULL) {
-		return epoll_wait(efpd, events, number_of_events, timeout);
+		return epoll_wait(epfd, events, number_of_events, timeout);
 	}
 
 	if (pthread_mutex_lock(&_epoll_lock) != SUCCESS) {
@@ -137,7 +137,7 @@ int epoll_pwait(int epfd,
 		return ERROR;
 	}
 
-	event_count = epoll_wait(efpd, events, number_of_events, timeout);
+	event_count = epoll_wait(epfd, events, number_of_events, timeout);
 
 	if (pthread_sigmask(SIG_SETMASK, sigmask, &original_mask) != SUCCESS) {
 		return ERROR;
@@ -164,17 +164,21 @@ size_t epoll_instance_size(int epfd) {
 }
 
 int close_epoll_instance(int epfd) {
+	EpollInstance *instance;
+
 	assert(epfd > 0);
 	assert(epfd < NUMBER_OF_EPOLL_INSTANCES);
 
-	if (tssx_count > 1) {
-		if (vector_destroy(&_epoll_instances[epfd].entries) == VECTOR_ERROR) {
+	instance = &_epoll_instances[epfd];
+
+	if (instance->tssx_count > 1) {
+		if (vector_destroy(&instance->entries) == VECTOR_ERROR) {
 			return ERROR;
 		}
 	}
 
-	tssx_count = 0;
-	normal_count = 0;
+	instance->tssx_count = 0;
+	instance->normal_count = 0;
 
 	return SUCCESS;
 }
@@ -214,14 +218,14 @@ int _setup_epoll_instances() {
 	return SUCCESS;
 }
 
-int _epoll_other_tssx_operation(int epfd,
-																int operation,
-																int fd,
-																struct epoll_event *event) {
+int _epoll_normal_control_operation(int epfd,
+																		int operation,
+																		int fd,
+																		struct epoll_event *event) {
 	if (operation == EPOLL_CTL_ADD) {
-		_epoll_instances[epfd].other_count++;
+		_epoll_instances[epfd].normal_count++;
 	} else if (operation == EPOLL_CTL_ADD) {
-		_epoll_instances[epfd].other_count--;
+		_epoll_instances[epfd].normal_count--;
 	}
 
 	return real_epoll_ctl(epfd, operation, fd, event);
@@ -285,9 +289,9 @@ int _epoll_push_back_entry(EpollInstance *instance,
 	if (instance->tssx_count == 1) {
 		// clang-format off
 		int code = vector_setup(
-        &instance->events,
+        &instance->entries,
         INITIAL_INSTANCE_CAPACITY,
-        sizeof(PollEntry)
+        sizeof(EpollEntry)
     );
 		// clang-format on
 
@@ -295,7 +299,7 @@ int _epoll_push_back_entry(EpollInstance *instance,
 		if (code == VECTOR_ERROR) return ERROR;
 	}
 
-	if (vector_push_back(&instance->events, &entry) == VECTOR_ERROR) {
+	if (vector_push_back(&instance->entries, &entry) == VECTOR_ERROR) {
 		return ERROR;
 	}
 
@@ -312,7 +316,7 @@ int _epoll_update_events(EpollInstance *instance,
 	if (fd == instance->first.fd) {
 		instance->first.event = *new_event;
 	} else {
-		EpollEntry *entry = _find_entry(instance, fd);
+		EpollEntry *entry = _find_epoll_entry(instance, fd);
 
 		if (entry == NULL) {
 			_invalid_argument_exception();
@@ -344,7 +348,7 @@ int _epoll_erase_from_instance(EpollInstance *instance, int fd) {
 	VECTOR_FOR_EACH(&instance->entries, iterator) {
 		EpollEntry *entry = iterator_get(&iterator);
 		if (entry->fd == fd) {
-			if (iterator_erase(instance->entries, &iterator) == VECTOR_ERROR) {
+			if (iterator_erase(&instance->entries, &iterator) == VECTOR_ERROR) {
 				return ERROR;
 			}
 
@@ -380,28 +384,35 @@ int _epoll_erase_first_from_instance(EpollInstance *instance) {
 	return SUCCESS;
 }
 
-int _simple_tssx_epoll_wait(const EpollInstance *instance,
+int _simple_tssx_epoll_wait(EpollInstance *instance,
 														struct epoll_event *events,
 														size_t number_of_events,
 														int timeout) {
 	size_t event_count = 0;
 	size_t start = current_milliseconds();
-	PollEntry *first = &instance->first;
+	EpollEntry *first = &instance->first;
 
 	assert(instance->tssx_count > 0);
 
 	if (instance->tssx_count == 1) {
-		return _tssx_epoll_wait_for_single_entry(instance->first, events, timeout);
+		// clang-format off
+		return _tssx_epoll_wait_for_single_entry(
+      &instance->first,
+      events,
+      number_of_events,
+      timeout
+    );
+		// clang-format on
 	}
 
 	do {
-		if (_check_epoll_entry(&first, events, number_of_events, event_count)) {
+		if (_check_epoll_entry(first, events, number_of_events, event_count)) {
 			++event_count;
 		}
 
 		VECTOR_FOR_EACH(&instance->entries, iterator) {
 			EpollEntry *entry = iterator_get(&iterator);
-			if (_check_epoll_entry(&entry, events, number_of_events, event_count)) {
+			if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
 				++event_count;
 			}
 		}
@@ -411,60 +422,62 @@ int _simple_tssx_epoll_wait(const EpollInstance *instance,
 }
 
 int _concurrent_epoll_wait(int epfd,
-													 const EpollInstance *instance,
 													 struct epoll_event *events,
 													 size_t number_of_events,
 													 int timeout) {
 	struct sigaction old_action;
-	pthread_t other_thread;
-	ready_count_t ready_count = ATOMIC_VAR_INIT(0);
+	pthread_t normal_thread;
+	event_count_t event_count = ATOMIC_VAR_INIT(0);
 	struct epoll_event *tssx_events;
-	size_t tssx_ready_count;
+	size_t tssx_event_count;
 
 	// clang-format off
-  EpollTask other_task = {
-    epfd, events, number_of_events, timeout, &ready_count, 0
+  EpollTask normal_task = {
+    epfd, events, number_of_events, timeout, &event_count, 0
   };
 	// clang-format on
 
-	tssx_events = calloc(number_of_events, sizeof(struct epoll_event);
+	tssx_events = calloc(number_of_events, sizeof(struct epoll_event));
 
 	if (_install_poll_signal_handler(&old_action) == ERROR) {
 		return ERROR;
 	}
 
-	if (_start_other_epoll_thread(&other_thread, &other_task) == ERROR) {
+	if (_start_normal_epoll_wait_thread(&normal_thread, &normal_task) == ERROR) {
 		return ERROR;
 	}
 
- tssx_ready_count = _concurrent_tssx_epoll_wait(
-      instance,
+	// clang-format off
+	tssx_event_count = _concurrent_tssx_epoll_wait(
+      _epoll_instances[epfd],
       tssx_events,
       number_of_events,
-      other_thread
+      normal_thread,
+      &event_count,
+      timeout
   );
+	// clang-format on
 
-  if (pthread_join(other_thread, NULL) == ERROR) {
-		return ERROR;
-  }
+	if (pthread_join(normal_thread, NULL) == ERROR) return ERROR;
+	if (_there_was_an_error(&event_count)) return ERROR;
 
-  for (size_t index = 0; index < tssx_ready_count; ++index) {
-		events[other_ready_count + index] = tssx_events[index];
+	for (size_t index = 0; index < tssx_event_count; ++index) {
+		events[normal_task.event_count + index] = tssx_events[index];
 	}
 
-  free(tssx_events);
+	free(tssx_events);
+	_restore_old_signal_action(&old_action);
 
-  _restore_old_signal_action(&old_action);
+	assert(tssx_event_count + normal_task.event_count ==
+				 atomic_load(&event_count));
 
-  assert(tssx_ready_count + other_ready_count == atomic_load(&ready_count));
-
-  return atomic_load(&ready_count);
+	return atomic_load(&event_count);
 }
 
-void _start_other_poll_thread(pthread_t *other_thread, EpollTask *task) {
-	thread_function_t function = (thread_function_t)_other_epoll;
+int _start_normal_poll_thread(pthread_t *normal_thread, EpollTask *task) {
+	thread_function_t function = (thread_function_t)_normal_epoll_wait;
 
-	if (pthread_create(other_thread, NULL, function, task) != SUCCESS) {
+	if (pthread_create(normal_thread, NULL, function, task) != SUCCESS) {
 		print_error("Error creating epoll thread");
 		return ERROR;
 	}
@@ -472,12 +485,11 @@ void _start_other_poll_thread(pthread_t *other_thread, EpollTask *task) {
 	return SUCCESS;
 }
 
-void _other_epoll(EpollTask *task) {
-	int local_ready_count;
+void _normal_epoll_wait(EpollTask *task) {
 	assert(task != NULL);
 
 	// clang-format off
-	local_ready_count = real_epoll_wait(
+	task->event_count = real_epoll_wait(
       task->epfd,
       task->events,
       task->number_of_events,
@@ -486,68 +498,70 @@ void _other_epoll(EpollTask *task) {
 	// clang-format on
 
 	// Don't touch anything else if there was an error in the main thread
-	if (_there_was_an_error(task->ready_count)) return;
+	if (_there_was_an_error(task->shared_event_count)) return;
 
 	// Check if there was an error in real_epoll, but not EINTR, which
 	// would be the signal received when one or more TSSX fd was ready
-	if (local_ready_count == ERROR) {
+	if (task->event_count == ERROR) {
 		if (errno != EINTR) {
-			atomic_store(task->ready_count, ERROR);
+			atomic_store(task->shared_event_count, ERROR);
 		}
 		return;
 	}
 
 	// Either there was a timeout (+= 0), or some FDs are ready
-	atomic_fetch_add(task->ready_count, local_ready_count);
-	task->other_ready_count = local_ready_count;
+	atomic_fetch_add(task->shared_event_count, task->event_count);
 }
 
-void _concurrent_tssx_epoll(EpollInstance *instance,
-														struct epoll_event *events,
-														size_t number_of_events,
-														pthread_t other_thread) {
-	size_t global_ready_count;
+void _concurrent_tssx_epoll_wait(EpollInstance *instance,
+																 struct epoll_event *events,
+																 size_t number_of_events,
+																 pthread_t normal_thread,
+																 event_count_t *shared_event_count,
+																 int timeout) {
+	size_t shared_event_count_value;
 	size_t start = current_milliseconds();
-	size_t local_ready_count = 0;
-	PollEntry *first = &instance->first;
+	size_t event_count = 0;
+	EpollEntry *first = &instance->first;
 
-	assert(task != NULL);
+	assert(instance != NULL);
 	assert(instance->tssx_count > 0);
 
 	// Do-while for the case of non-blocking (timeout == -1)
 	// so that we do at least one iteration
 
 	do {
-		if (_check_epoll_entry(&first, events, number_of_events, event_count)) {
-			++local_ready_count;
+		if (_check_epoll_entry(first, events, number_of_events, event_count)) {
+			++event_count;
 		}
 
 		VECTOR_FOR_EACH(&instance->entries, iterator) {
 			EpollEntry *entry = iterator_get(&iterator);
-			if (_check_epoll_entry(&entry, events, number_of_events, event_count)) {
-				++local_ready_count;
+			if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
+				++event_count;
 			}
 		}
 
-		global_ready_count = atomic_load(task->ready_count);
+		shared_event_count_value = atomic_load(shared_event_count);
 
-		// Don't touch if there was an error in the other thread
-		if (global_ready_count == ERROR) return;
-		if (global_ready_count > 0) break;
-		if (local_ready_count > 0) {
-			_kill_other_thread(other_thread);
+		// Don't touch if there was an error in the normal thread
+		if (shared_event_count_value == ERROR) return;
+		if (shared_event_count_value > 0) break;
+		if (event_count > 0) {
+			_kill_normal_thread(normal_thread);
 			break;
 		}
 
 	} while (!_poll_timeout_elapsed(start, timeout));
 
 	// Add whatever we have (zero if the
-	// timeout elapsed or other thread had activity)
-	atomic_fetch_add(task->ready_count, local_ready_count);
+	// timeout elapsed or normal thread had activity)
+	atomic_fetch_add(shared_event_count, event_count);
 }
 
-int _tssx_epoll_wait_for_single_entry(const EpollEntry *entry,
+int _tssx_epoll_wait_for_single_entry(EpollEntry *entry,
 																			struct epoll_event *events,
+																			size_t number_of_events,
 																			int timeout) {
 	size_t start = current_milliseconds();
 
@@ -558,22 +572,22 @@ int _tssx_epoll_wait_for_single_entry(const EpollEntry *entry,
 	return SUCCESS;
 }
 
-bool _check_epoll_entry(const EpollEntry *entry,
+bool _check_epoll_entry(EpollEntry *entry,
 												struct epoll_event *events,
 												size_t number_of_events,
 												size_t event_count) {
-	int code;
 	bool activity;
+	struct epoll_event *event;
 	assert(entry != NULL);
 
 	if (event_count == number_of_events) return false;
 
+	event = events[event_count];
+	event->events = 0;
 	activity = false;
-	for (size_t index = 0; index < SUPPORTED_OPERATIONS; ++index) {
-		struct epoll_event *event = events[event_count];
-		event->events = 0;
-		if (!_epoll_event_registered(entry, index)) continue;
 
+	for (size_t index = 0; index < SUPPORTED_OPERATIONS; ++index) {
+		if (!_epoll_event_registered(entry, index)) continue;
 		if (_supported_operations[index] == EPOLL_HANGUP) {
 			if (_check_for_hangup(entry, event)) {
 				activity = true;
@@ -626,10 +640,10 @@ Operation _convert_operation(size_t operation_index) {
 	assert(false);
 }
 
-bool _epoll_event_registered(const EpollEntry *entry, size_t operation_index) {
+bool _epoll_event_registered(EpollEntry *entry, size_t operation_index) {
 	assert(entry != NULL);
 	assert(operation_index < SUPPORTED_OPERATIONS);
-	return entry->event.events & _supported_operations[operation_index]);
+	return entry->event.events & _supported_operations[operation_index];
 }
 
 void _invalid_argument_exception() {

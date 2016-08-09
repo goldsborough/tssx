@@ -3,7 +3,7 @@
 
 #include <signal.h>
 #include <stddef.h>
-#include <sys/epoll.h>
+// #include <sys/epoll.h>
 
 #include "tssx/common-poll-overrides.h"
 #include "tssx/vector.h"
@@ -50,8 +50,8 @@ typedef struct EpollTask {
 	struct epoll_event *events;
 	size_t number_of_events;
 	int timeout;
-	ready_count_t *ready_count;
-	size_t other_ready_count;
+	event_count_t *shared_event_count;
+	size_t event_count;
 } EpollTask;
 
 /******************** REAL FUNCTIONS ********************/
@@ -86,6 +86,12 @@ int epoll_pwait(int epfd,
 								int timeout,
 								const sigset_t *sigmask);
 
+bool has_epoll_instance_associated(int epfd);
+
+size_t epoll_instance_size(int epfd);
+
+int close_epoll_instance(int epfd);
+
 /******************** PRIVATE DEFINITIONS ********************/
 
 #define SUPPORTED_OPERATIONS 3
@@ -100,16 +106,16 @@ extern pthread_mutex_t _epoll_lock;
 
 int _setup_epoll_instances();
 
-int _epoll_other_tssx_operation(int epfd,
-																int operation,
-																int fd,
-																struct epoll_event *event);
-
 int _epoll_tssx_control_operation(int epfd,
 																	int operation,
 																	int fd,
 																	struct epoll_event *event,
 																	Session *session);
+
+int _epoll_normal_control_operation(int epfd,
+																		int operation,
+																		int fd,
+																		struct epoll_event *event);
 
 int _epoll_add_to_instance(EpollInstance *instance,
 													 int fd,
@@ -135,35 +141,38 @@ EpollEntry *_find_epoll_entry(EpollInstance *instance, int fd);
 int _epoll_erase_from_instance(EpollInstance *instance, int fd);
 int _epoll_erase_first_from_instance(EpollInstance *instance);
 
-int _simple_tssx_epoll_wait(const EpollInstance *instance,
+int _simple_tssx_epoll_wait(EpollInstance *instance,
 														struct epoll_event *events,
 														size_t number_of_events,
 														int timeout);
 
 int _concurrent_epoll_wait(int epfd,
-													 const EpollInstance *instance,
 													 struct epoll_event *events,
 													 size_t number_of_events,
 													 int timeout);
-void _start_other_poll_thread(pthread_t *other_thread, EpollTask *task);
-void _other_epoll(EpollTask *task);
-void _concurrent_tssx_epoll(EpollInstance *instance,
-														struct epoll_event *events,
-														size_t number_of_events,
-														pthread_t other_thread);
 
-int _tssx_epoll_wait_for_single_entry(const EpollEntry *entry,
+int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task);
+void _normal_epoll_wait(EpollTask *task);
+void _concurrent_tssx_epoll_wait(EpollInstance *instance,
+																 struct epoll_event *events,
+																 size_t number_of_events,
+																 pthread_t normal_thread,
+																 event_count_t *shared_event_count,
+																 int timeout);
+
+int _tssx_epoll_wait_for_single_entry(EpollEntry *entry,
 																			struct epoll_event *events,
+																			size_t number_of_events,
 																			int timeout);
 
-bool _check_epoll_entry(const EpollEntry *entry,
+bool _check_epoll_entry(EpollEntry *entry,
 												struct epoll_event *events,
 												size_t number_of_events,
 												size_t event_count);
 bool _epoll_ready_for_operation(EpollEntry *entry,
 																size_t operation_index,
 																struct epoll_event *event);
-bool _epoll_event_registered(const EpollEntry *entry, size_t operation_index);
+bool _epoll_event_registered(EpollEntry *entry, size_t operation_index);
 bool _check_for_hangup(EpollEntry *entry, struct epoll_event *event);
 
 Operation _convert_operation(size_t operation_index);

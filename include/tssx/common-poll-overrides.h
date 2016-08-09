@@ -14,20 +14,20 @@
 #define DONT_BLOCK 0
 
 typedef void *(*thread_function_t)(void *);
-typedef atomic_int_fast16_t ready_count_t;
+typedef atomic_int_fast16_t event_count_t;
 
 struct Connection;
 struct sigaction;
 
 /******************** HELPERS ********************/
 
-bool _there_was_an_error(ready_count_t *ready_count);
+bool _there_was_an_error(event_count_t *event_count);
 bool _poll_timeout_elapsed(size_t start, int timeout);
 
 int _install_poll_signal_handler(struct sigaction *old_action);
 int _restore_old_signal_action(struct sigaction *old_action);
 void _poll_signal_handler(int signal_number);
-void _kill_other_thread(pthread_t other_thread);
+void _kill_normal_thread(pthread_t normal_thread);
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/
 
