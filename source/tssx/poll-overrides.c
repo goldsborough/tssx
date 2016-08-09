@@ -241,7 +241,7 @@ bool _tell_that_ready_for(PollEntry* entry, Operation operation) {
 }
 
 void _check_for_poll_hangup(PollEntry* entry) {
-	assert(entry != NULL);
+	assert(entry != NULL);	
 	if (connection_peer_died(entry->connection)) {
 		entry->poll_pointer->revents |= POLLHUP;
 	}

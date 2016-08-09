@@ -8,19 +8,20 @@
 void epoll_loop(int server_socket) {
 	struct epoll_event events[MAXIMUM_NUMBER_OF_CONNECTIONS];
 	int epfd;
+	int timeout;
 
+	timeout = TIMEOUT * 1000;
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
 
 	while (true) {
 		int number_of_events;
 
-		number_of_events = epoll_wait(epfd, events, sizeof events, TIMEOUT);
+		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
 			case TIMEOUT: die("Timeout on epoll");
 		}
-
 		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
 	}
 

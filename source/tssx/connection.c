@@ -62,6 +62,7 @@ void connection_add_user(Connection* connection) {
 }
 
 bool connection_peer_died(Connection* connection) {
+  assert(connection != NULL);
 	return atomic_load(connection->open_count) == 1;
 }
 
