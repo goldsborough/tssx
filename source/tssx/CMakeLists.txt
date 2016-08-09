@@ -21,7 +21,14 @@ set(TSSX_COMMON_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/bridge.c
   ${CMAKE_CURRENT_SOURCE_DIR}/reverse-map.c
   ${CMAKE_CURRENT_SOURCE_DIR}/common-poll-overrides.c
-	)
+)
+
+if(NOT APPLE)
+  set(TSSX_COMMON_SOURCES
+    ${TSSX_COMMON_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/epoll-overrides.c
+  )
+endif()
 
 set(TSSX_SERVER_SOURCES
   ${TSSX_COMMON_SOURCES}
