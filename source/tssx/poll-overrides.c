@@ -233,16 +233,18 @@ bool _waiting_for(PollEntry* entry, Operation operation) {
 }
 
 bool _tell_that_ready_for(PollEntry* entry, Operation operation) {
-	if (operation == READ) {
-		_check_for_poll_hangup(entry);
-	}
+	// There seems to be some initial edge case breaking this
+	// if (operation == READ) {
+	// 	_check_for_poll_hangup(entry);
+	// }
 
 	return entry->poll_pointer->revents |= _operation_map[operation];
 }
 
 void _check_for_poll_hangup(PollEntry* entry) {
-	assert(entry != NULL);	
+	assert(entry != NULL);
 	if (connection_peer_died(entry->connection)) {
+		printf("hangup %d\n", atomic_load(entry->connection->open_count));
 		entry->poll_pointer->revents |= POLLHUP;
 	}
 }
