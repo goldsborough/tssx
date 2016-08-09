@@ -1,8 +1,10 @@
 #define _GNU_SOURCE
 
+#include <assert.h>
 #include <signal.h>
 
 #include "tssx/common-poll-overrides.h"
+#include "tssx/connection.h"
 #include "utility/utility.h"
 
 bool _there_was_an_error(ready_count_t* ready_count) {

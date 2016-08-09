@@ -13,6 +13,8 @@
 #define INITIAL_INSTANCE_CAPACITY 8
 #define EPOLL_HANGUP EPOLLRDHUP
 
+/******************** REAL FUNCTIONS ********************/
+
 typedef int (*real_epoll_create_t)(int);
 typedef int (*real_epoll_create1_t)(int);
 typedef int (*real_epoll_ctl_t)(int, int, int, struct epoll_event *);
@@ -22,6 +24,8 @@ typedef int (*real_epoll_wait_t)(int, struct epoll_event *, int, int);
 typedef int (*real_epoll_pwait_t)
   (int, struct epoll_event *, int, int, const sigset_t *);
 // clang-format on
+
+/******************** STRUCTURES ********************/
 
 typedef int epoll_operation_t;
 

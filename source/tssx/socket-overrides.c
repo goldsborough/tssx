@@ -148,12 +148,18 @@ int setsockopt(int fd,
 }
 
 int close(int fd) {
+  // epoll is linux only
+#ifdef __linux__
   // These two are definitely mutually exclusive
   if (has_epoll_instance_associated(fd)) {
     close_epoll_instance(fd);
   } else {
     bridge_erase(&bridge, fd);
   }
+#else
+  bridge_erase(&bridge, fd);
+#endif
+
 	return real_close(fd);
 }
 

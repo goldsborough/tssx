@@ -8,6 +8,7 @@
 #include <stdlib.h>
 
 #include "tssx/bridge.h"
+#include "tssx/connection.h"
 #include "tssx/poll-overrides.h"
 #include "tssx/session.h"
 #include "tssx/vector.h"
@@ -88,7 +89,7 @@ int _concurrent_poll(Vector* tssx_fds, Vector* other_fds, int timeout) {
 	struct sigaction old_action;
 	pthread_t other_thread;
 	PollTask other_task = {other_fds, timeout, &ready_count};
-	PollTask tssx_task = {tssx_task, timeout, &ready_count};
+	PollTask tssx_task = {tssx_fds, timeout, &ready_count};
 
 	if ((_install_poll_signal_handler(&old_action)) == ERROR) {
 		return ERROR;
@@ -232,7 +233,18 @@ bool _waiting_for(PollEntry* entry, Operation operation) {
 }
 
 bool _tell_that_ready_for(PollEntry* entry, Operation operation) {
+	if (operation == READ) {
+		_check_for_poll_hangup(entry);
+	}
+
 	return entry->poll_pointer->revents |= _operation_map[operation];
+}
+
+void _check_for_poll_hangup(PollEntry* entry) {
+	assert(entry != NULL);
+	if (connection_peer_died(entry->connection)) {
+		entry->poll_pointer->revents |= POLLHUP;
+	}
 }
 
 void _cleanup(Vector* tssx_fds, Vector* other_fds) {

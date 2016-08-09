@@ -61,6 +61,7 @@ void _concurrent_tssx_poll(PollTask *task, pthread_t other_thread);
 bool _check_ready(PollEntry *entry, Operation operation);
 bool _waiting_for(PollEntry *entry, Operation operation);
 bool _tell_that_ready_for(PollEntry *entry, Operation operation);
+void _check_for_poll_hangup(PollEntry *entry);
 
 void _cleanup(struct Vector *tssx_fds, struct Vector *other_fds);
 

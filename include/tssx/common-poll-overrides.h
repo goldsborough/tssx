@@ -13,7 +13,11 @@
 #define BLOCK_FOREVER -1
 #define DONT_BLOCK 0
 
+typedef void *(*thread_function_t)(void *);
 typedef atomic_int_fast16_t ready_count_t;
+
+struct Connection;
+struct sigaction;
 
 /******************** HELPERS ********************/
 

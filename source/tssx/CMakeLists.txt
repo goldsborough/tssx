@@ -20,6 +20,7 @@ set(TSSX_COMMON_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/free-list.c
 	${CMAKE_CURRENT_SOURCE_DIR}/bridge.c
   ${CMAKE_CURRENT_SOURCE_DIR}/reverse-map.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/common-poll-overrides.c
 	)
 
 set(TSSX_SERVER_SOURCES
