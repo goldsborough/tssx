@@ -40,6 +40,7 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 		event_count = _simple_tssx_poll(&tssx_fds, timeout);
 	} else {
 		event_count = _concurrent_poll(&tssx_fds, &normal_fds, timeout);
+		_join_poll_partition(fds, nfds, &normal_fds);
 	}
 
 	_cleanup(&tssx_fds, &normal_fds);
@@ -82,6 +83,25 @@ int _partition(Vector* tssx_fds,
 	}
 
 	return SUCCESS;
+}
+
+void _join_poll_partition(struct pollfd fds[],
+													nfds_t number_of_fds,
+													Vector* normal_fds) {
+	size_t normal_index = 0;
+
+	for (nfds_t index = 0; index < number_of_fds; ++index) {
+		Session* session;
+		struct pollfd* entry;
+
+		session = bridge_lookup(&bridge, fds[index].fd);
+		if (session_has_connection(session)) continue;
+
+		entry = vector_get(normal_fds, normal_index);
+		assert(entry->fd == fds[index].fd);
+		fds[index].revents = entry->revents;
+		++normal_index;
+	}
 }
 
 int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
@@ -167,12 +187,10 @@ int _simple_tssx_poll(Vector* tssx_fds, int timeout) {
 		// Do a full loop over all FDs
 		VECTOR_FOR_EACH(tssx_fds, iterator) {
 			PollEntry* entry = iterator_get(&iterator);
-			if (_check_ready(entry, READ) || _check_ready(entry, WRITE)) {
-				++event_count;
-			}
+			if (_check_poll_events(entry)) ++event_count;
 		}
-
-	} while (event_count == 0 && !_poll_timeout_elapsed(start, timeout));
+		if (event_count > 0) break;
+	} while (!_poll_timeout_elapsed(start, timeout));
 
 	return event_count;
 }
@@ -192,9 +210,7 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t normal_thread) {
 		// Do a full loop over all FDs
 		VECTOR_FOR_EACH(task->fds, iterator) {
 			PollEntry* entry = iterator_get(&iterator);
-			if (_check_ready(entry, READ) || _check_ready(entry, WRITE)) {
-				++local_event_count;
-			}
+			if (_check_poll_events(entry)) ++local_event_count;
 		}
 
 		shared_event_count = atomic_load(task->event_count);
@@ -212,11 +228,33 @@ void _concurrent_tssx_poll(PollTask* task, pthread_t normal_thread) {
 	atomic_fetch_add(task->event_count, local_event_count);
 }
 
+bool _check_poll_events(PollEntry* entry) {
+	bool event_occurred = false;
+
+	if (_entry_peer_died(entry)) {
+		// Note that POLLHUP is output only and ignored in events,
+		// meaning we must always set it, irrespective of it being
+		// expected by the user in pollfd.events
+		entry->poll_pointer->revents |= POLLHUP;
+
+		// If the connection peer died, a call to read() will return
+		// zero, therefore a hangup event is also a read event
+		_tell_that_ready_for(entry, READ);
+
+		return true;
+	}
+
+	if (_check_ready(entry, READ)) event_occurred = true;
+	if (_check_ready(entry, WRITE)) event_occurred = true;
+
+	return event_occurred;
+}
+
 
 bool _check_ready(PollEntry* entry, Operation operation) {
 	assert(entry != NULL);
 	if (_waiting_for(entry, operation)) {
-		// This here is the polymorphic call (see client/server-overrides)
+		// _ready_for here is the polymorphic call (see client/server-overrides)
 		if (_ready_for(entry->connection, operation)) {
 			_tell_that_ready_for(entry, operation);
 			return true;
@@ -233,20 +271,12 @@ bool _waiting_for(PollEntry* entry, Operation operation) {
 }
 
 bool _tell_that_ready_for(PollEntry* entry, Operation operation) {
-	// There seems to be some initial edge case breaking this
-	// if (operation == READ) {
-	// 	_check_for_poll_hangup(entry);
-	// }
-
 	return entry->poll_pointer->revents |= _operation_map[operation];
 }
 
-void _check_for_poll_hangup(PollEntry* entry) {
+bool _entry_peer_died(PollEntry* entry) {
 	assert(entry != NULL);
-	if (connection_peer_died(entry->connection)) {
-		printf("hangup %d\n", atomic_load(entry->connection->open_count));
-		entry->poll_pointer->revents |= POLLHUP;
-	}
+	return connection_peer_died(entry->connection);
 }
 
 void _cleanup(Vector* tssx_fds, Vector* normal_fds) {

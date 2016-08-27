@@ -50,8 +50,8 @@ Connection* setup_connection(int segment_id, const ConnectionOptions* options) {
 	shared_memory = attach_segment(connection->segment_id);
 
 	_init_and_increment_open_count(connection, shared_memory);
-	_retrieve_server_buffer(connection, shared_memory, options);
-	_retrieve_client_buffer(connection, shared_memory, options);
+	_retrieve_server_buffer(connection, shared_memory);
+	_retrieve_client_buffer(connection, shared_memory);
 
 	return connection;
 }

@@ -7,7 +7,8 @@ struct Session;
 
 /******************** FORWARD DECLARATIONS ********************/
 
-int send_segment_id_to_client(int client_socket, struct Session* session);
-int setup_tssx(int client_socket);
+int _setup_tssx(int client_socket);
+int _send_segment_id_to_client(int client_socket, struct Session* session);
+int _synchronize_with_client(int client_fd);
 
 #endif /* SERVER_OVERRIDES_H */

@@ -1,5 +1,6 @@
 #define _XOPEN_SOURCE 500
 
+#include <assert.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>

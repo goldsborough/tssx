@@ -74,8 +74,7 @@ int bridge_erase(Bridge* bridge, int fd) {
 }
 
 Session* bridge_lookup(Bridge* bridge, int fd) {
-	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
-
+	if (_lazy_bridge_setup(bridge) == ERROR) return NULL;
 	return session_table_get(&bridge->session_table, fd);
 }
 

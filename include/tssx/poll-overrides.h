@@ -45,6 +45,9 @@ int _partition(struct Vector *tssx_fds,
 							 struct Vector *normal_fds,
 							 struct pollfd fds[],
 							 nfds_t number);
+void _join_poll_partition(struct pollfd fds[],
+													nfds_t number_of_fds,
+													struct Vector *normal_fds);
 
 PollEntry _create_entry(struct pollfd *poll_pointer);
 
@@ -58,10 +61,11 @@ int _concurrent_poll(struct Vector *tssx_fds,
 void _normal_poll(PollTask *task);
 void _concurrent_tssx_poll(PollTask *task, pthread_t normal_thread);
 
+bool _check_poll_events(PollEntry *entry);
 bool _check_ready(PollEntry *entry, Operation operation);
 bool _waiting_for(PollEntry *entry, Operation operation);
 bool _tell_that_ready_for(PollEntry *entry, Operation operation);
-void _check_for_poll_hangup(PollEntry *entry);
+bool _entry_peer_died(PollEntry *entry);
 
 void _cleanup(struct Vector *tssx_fds, struct Vector *normal_fds);
 

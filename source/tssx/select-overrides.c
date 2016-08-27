@@ -9,6 +9,7 @@
 #include <sys/signal.h>
 
 #include "tssx/bridge.h"
+#include "tssx/connection.h"
 #include "tssx/poll-overrides.h"
 #include "tssx/select-overrides.h"
 #include "utility/utility.h"
@@ -81,7 +82,9 @@ struct pollfd* _setup_poll_entries(size_t population_count,
 																	 size_t highest_fd) {
 	struct pollfd* poll_entries;
 
-	if ((poll_entries = _allocate_poll_entries(population_count)) == NULL) {
+	poll_entries = calloc(population_count, sizeof *poll_entries);
+	if (poll_entries == NULL) {
+		perror("Error allocating memory for poll entries");
 		return NULL;
 	}
 
@@ -97,45 +100,17 @@ int _read_poll_entries(DescriptorSets* sets,
 	_clear_all_sets(sets);
 
 	for (size_t index = 0; index < population_count; ++index) {
-		int fd = poll_entries[index].fd;
+		struct pollfd* entry = &(poll_entries[index]);
 
-		if (poll_entries[index].revents & POLLNVAL) {
-			free(poll_entries);
-			assert(false);
-			return ERROR;
-		}
-
-		if (poll_entries[index].revents & POLLIN) {
-			FD_SET(fd, sets->readfds);
-		}
-		if (poll_entries[index].revents & POLLOUT) {
-			FD_SET(fd, sets->writefds);
-		}
-		if (poll_entries[index].revents & POLLERR) {
-			FD_SET(fd, sets->errorfds);
-		}
+		if (_check_poll_event_occurred(entry, sets, POLLNVAL)) continue;
+		_check_poll_event_occurred(entry, sets, POLLIN);
+		_check_poll_event_occurred(entry, sets, POLLOUT);
+		_check_poll_event_occurred(entry, sets, POLLERR);
 	}
 
 	free(poll_entries);
 
 	return SUCCESS;
-}
-
-struct pollfd* _allocate_poll_entries(size_t population_count) {
-	struct pollfd* poll_entries;
-	size_t poll_entries_length;
-
-	poll_entries_length = sizeof *poll_entries * population_count;
-	poll_entries = malloc(poll_entries_length);
-
-	if (poll_entries == NULL) {
-		perror("Error allocating memory for poll entries");
-		return NULL;
-	}
-
-	memset(poll_entries, 0, poll_entries_length);
-
-	return poll_entries;
 }
 
 void _fill_poll_entries(struct pollfd* poll_entries,
@@ -186,20 +161,7 @@ int _select_on_tssx_only(DescriptorSets* sets,
 	do {
 		for (size_t fd = lowest_fd; fd < highest_fd; ++fd) {
 			Session* session = bridge_lookup(&bridge, fd);
-			assert(session != NULL);
-			bool ready_for_reading = false;
-			bool ready_for_writing = false;
-
-			if (_fd_is_set(fd, original.readfds)) {
-				ready_for_reading = _ready_for(session->connection, READ);
-				if (ready_for_reading) FD_SET(fd, sets->readfds);
-			}
-			if (_fd_is_set(fd, original.writefds)) {
-				ready_for_writing = _ready_for(session->connection, WRITE);
-				if (ready_for_writing) FD_SET(fd, sets->writefds);
-			}
-
-			if (ready_for_reading || ready_for_writing) ready_count++;
+			if (_check_select_events(fd, session, &original)) ++ready_count;
 		}
 		if (ready_count > 0) break;
 	} while (!_select_timeout_elapsed(start, milliseconds));
@@ -210,6 +172,7 @@ int _select_on_tssx_only(DescriptorSets* sets,
 int _select_on_tssx_only_fast_path(DescriptorSets* sets,
 																	 size_t fd,
 																	 struct timeval* timeout) {
+	bool ready;
 	bool select_read = _fd_is_set(fd, sets->readfds);
 	bool select_write = _fd_is_set(fd, sets->writefds);
 	assert(select_read || select_write);
@@ -221,34 +184,26 @@ int _select_on_tssx_only_fast_path(DescriptorSets* sets,
 
 	Session* session = bridge_lookup(&bridge, fd);
 
-	bool ready = false;
+	ready = false;
 	if (select_read && select_write) {
 		do {
-			if (_select_operation(session, WRITE, sets->writefds, fd)) ready = true;
-			if (_select_operation(session, READ, sets->readfds, fd)) ready = true;
+			if (_select_peer_died(fd, session, sets)) return true;
+			if (_ready_for_select(fd, session, sets->writefds, WRITE)) ready = true;
+			if (_ready_for_select(fd, session, sets->readfds, READ)) ready = true;
 		} while (!ready && !_select_timeout_elapsed(start, milliseconds));
 	} else if (select_read) {
 		do {
-			if (_select_operation(session, READ, sets->readfds, fd)) ready = true;
-		} while (!ready && !_select_timeout_elapsed(start, milliseconds));
+			if (_select_peer_died(fd, session, sets)) return true;
+			if (_ready_for_select(fd, session, sets->readfds, READ)) return true;
+		} while (!_select_timeout_elapsed(start, milliseconds));
 	} else {
 		do {
-			if (_select_operation(session, WRITE, sets->writefds, fd)) ready = true;
-		} while (!ready && !_select_timeout_elapsed(start, milliseconds));
+			if (_select_peer_died(fd, session, sets)) return true;
+			if (_ready_for_select(fd, session, sets->writefds, WRITE)) return true;
+		} while (!_select_timeout_elapsed(start, milliseconds));
 	}
 
 	return ready;
-}
-
-bool _select_operation(const Session* session,
-											 Operation operation,
-											 fd_set* set,
-											 int fd) {
-	if (_ready_for(session->connection, operation)) {
-		FD_SET(fd, set);
-		return true;
-	}
-	return false;
 }
 
 void _count_tssx_sockets(size_t highest_fd,
@@ -315,4 +270,91 @@ bool _select_timeout_elapsed(size_t start, int timeout) {
 
 void _clear_set(fd_set* set) {
 	if (set != NULL) FD_ZERO(set);
+}
+
+bool _check_select_events(int fd, Session* session, DescriptorSets* sets) {
+	bool event_occurred = false;
+
+	assert(session != NULL);
+	assert(sets != NULL);
+
+	if (_select_peer_died(fd, session, sets)) return true;
+
+	if (_waiting_and_ready_for_select(fd, session, sets, READ)) {
+		event_occurred = true;
+	}
+
+	if (_waiting_and_ready_for_select(fd, session, sets, WRITE)) {
+		event_occurred = true;
+	}
+
+	return event_occurred;
+}
+
+bool _select_peer_died(int fd, Session* session, DescriptorSets* sets) {
+	if (connection_peer_died(session->connection)) {
+		// When the connection hangs up (open-count drops to one)
+		// a read event should be triggered, as read() will return zero
+		FD_SET(fd, sets->readfds);
+		return true;
+	}
+
+	return false;
+}
+
+bool _waiting_and_ready_for_select(int fd,
+																	 Session* session,
+																	 const DescriptorSets* sets,
+																	 Operation operation) {
+	fd_set* set;
+
+	set = _fd_set_for_operation(sets, operation);
+	if (!_fd_is_set(fd, set)) return false;
+
+	return _ready_for_select(fd, session, set, operation);
+}
+
+bool _ready_for_select(int fd,
+											 Session* session,
+											 fd_set* set,
+											 Operation operation) {
+	if (_ready_for(session->connection, operation)) {
+		FD_SET(fd, set);
+		return true;
+	}
+
+	return false;
+}
+
+bool _check_poll_event_occurred(const struct pollfd* entry,
+																DescriptorSets* sets,
+																int event) {
+	fd_set* set;
+
+	assert(entry != NULL);
+	assert(sets != NULL);
+	assert(event == POLLIN || event == POLLOUT || event == POLLERR ||
+				 event == POLLNVAL);
+
+	if (entry->revents & event) {
+		set = _fd_set_for_poll_event(sets, event);
+		FD_SET(entry->fd, set);
+		return true;
+	}
+
+	return false;
+}
+
+fd_set* _fd_set_for_operation(const DescriptorSets* sets, Operation operation) {
+	return (operation == READ) ? sets->readfds : sets->writefds;
+}
+
+fd_set* _fd_set_for_poll_event(const DescriptorSets* sets, int poll_event) {
+	switch (poll_event) {
+		case POLLNVAL: return sets->errorfds;
+		case POLLIN: return sets->readfds;
+		case POLLOUT: return sets->writefds;
+		case POLLERR: return sets->errorfds;
+		default: assert(false); return NULL;
+	}
 }

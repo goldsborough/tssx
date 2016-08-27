@@ -6,15 +6,23 @@
 
 #include "tssx/client-overrides.h"
 #include "tssx/common-overrides.h"
-#include "tssx/poll-overrides.h"
 #include "utility/sockets.h"
 
 int connect(int fd, const sockaddr* address, socklen_t length) {
+	int use_tssx;
+
 	if (real_connect(fd, address, length) == ERROR) {
 		return ERROR;
 	}
 
-	return setup_tssx(fd);
+	if ((use_tssx = check_tssx_usage(fd, CLIENT)) == ERROR) {
+		print_error("Could not check if socket uses TSSX");
+		return ERROR;
+	} else if (!use_tssx) {
+		return SUCCESS;
+	}
+
+	return _setup_tssx(fd);
 }
 
 ssize_t read(int fd, void* destination, size_t requested_bytes) {
@@ -41,7 +49,33 @@ ssize_t write(int fd, const void* source, size_t requested_bytes) {
 
 /******************** HELPERS ********************/
 
-int read_segment_id_from_server(int client_socket) {
+int _setup_tssx(int fd) {
+	int segment_id;
+	Session session;
+	ConnectionOptions options;
+
+	// Read the options first
+	options = options_from_socket(fd, CLIENT);
+
+	segment_id = _read_segment_id_from_server(fd);
+	if (segment_id == ERROR) {
+		return ERROR;
+	}
+
+	session.connection = setup_connection(segment_id, &options);
+	if (session.connection == NULL) {
+		return ERROR;
+	}
+
+	if (_synchronize_with_server(fd) == ERROR) {
+		print_error("Error synchronizing with server during setup\n");
+		return ERROR;
+	}
+
+	return bridge_insert(&bridge, fd, &session);
+}
+
+int _read_segment_id_from_server(int client_socket) {
 	int return_code;
 	int segment_id;
 	int flags;
@@ -72,33 +106,8 @@ int read_segment_id_from_server(int client_socket) {
 	return segment_id;
 }
 
-int setup_tssx(int fd) {
-	int segment_id;
-	int use_tssx;
-	Session session;
-	ConnectionOptions options;
-
-	if ((use_tssx = check_tssx_usage(fd, CLIENT)) == ERROR) {
-		print_error("Could not check if socket uses TSSX");
-		return ERROR;
-	} else if (!use_tssx) {
-		return SUCCESS;
-	}
-
-	// Read the options first
-	options = options_from_socket(fd, CLIENT);
-
-	segment_id = read_segment_id_from_server(fd);
-	if (segment_id == ERROR) {
-		return ERROR;
-	}
-
-	session.connection = setup_connection(segment_id, &options);
-	if (session.connection == NULL) {
-		return ERROR;
-	}
-
-	return bridge_insert(&bridge, fd, &session);
+int _synchronize_with_server(int fd) {
+	return (real_write(fd, "!", 1) == ERROR) ? ERROR : SUCCESS;
 }
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/
@@ -115,8 +124,8 @@ bool is_non_blocking(Connection* connection) {
 }
 
 bool _ready_for(Connection* connection, Operation operation) {
+	assert(connection != NULL);
 	if (operation == READ) {
-		if (connection_peer_died(connection)) return true;
 		return buffer_ready_for(connection->server_buffer, READ);
 	} else {
 		return buffer_ready_for(connection->client_buffer, WRITE);

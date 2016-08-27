@@ -43,8 +43,6 @@ int _forward_to_poll(size_t highest_fd,
 										 size_t population_count,
 										 struct timeval *timeout);
 
-struct pollfd *_allocate_poll_entries(size_t population_count);
-
 struct pollfd *_setup_poll_entries(size_t population_count,
 																	 const DescriptorSets *sets,
 																	 size_t highest_fd);
@@ -74,16 +72,35 @@ void _count_tssx_sockets(size_t highest_fd,
 
 bool _is_in_any_set(int fd, const DescriptorSets *sets);
 
-bool _select_operation(const Session *session,
-											 Operation operation,
-											 fd_set *set,
-											 int fd);
-
 void _copy_all_sets(DescriptorSets *destination, const DescriptorSets *source);
 void _copy_set(fd_set *destination, const fd_set *source);
 
 void _clear_all_sets(DescriptorSets *sets);
 bool _fd_is_set(int fd, const fd_set *set);
+
+bool _check_select_events(int fd, Session *session, DescriptorSets *sets);
+
+bool _select_peer_died(int fd, Session *session, DescriptorSets *sets);
+
+bool _waiting_and_ready_for_select(int fd,
+																	 Session *session,
+																	 const DescriptorSets *sets,
+																	 Operation operation);
+
+bool _ready_for_select(int fd,
+											 Session *session,
+											 fd_set *set,
+											 Operation operation);
+
+bool _check_poll_event_occurred(const struct pollfd *entry,
+																DescriptorSets *sets,
+																int event);
+
+fd_set *_fd_set_for_operation(const DescriptorSets *sets, Operation operation);
+fd_set *_fd_set_for_poll_event(const DescriptorSets *sets, int poll_event);
+
+fd_set *_fd_set_for_operation(const DescriptorSets *sets, Operation operation);
+fd_set *_fd_set_for_poll_event(const DescriptorSets *sets, int poll_event);
 
 bool _select_timeout_elapsed(size_t start, int timeout);
 

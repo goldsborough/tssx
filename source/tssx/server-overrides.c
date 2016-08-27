@@ -1,9 +1,8 @@
-#include "tssx/server-overrides.h"
-#include "tssx/common-overrides.h"
-#include "tssx/poll-overrides.h"
-
 #include <sys/socket.h>
 #include <sys/types.h>
+
+#include "tssx/common-overrides.h"
+#include "tssx/server-overrides.h"
 
 /******************** OVERRIDES ********************/
 
@@ -16,12 +15,13 @@ int accept(int server_socket, sockaddr *address, socklen_t *length) {
 	}
 
 	if ((use_tssx = check_tssx_usage(server_socket, SERVER)) == ERROR) {
+		print_error("Could not check if server uses TSSX\n");
 		return ERROR;
 	} else if (!use_tssx) {
 		return client_socket;
 	}
 
-	if (setup_tssx(client_socket) == ERROR) {
+	if (_setup_tssx(client_socket) == ERROR) {
 		return ERROR;
 	}
 
@@ -52,7 +52,7 @@ ssize_t write(int key, const void *source, size_t requested_bytes) {
 
 /******************** HELPERS ********************/
 
-int setup_tssx(int client_socket) {
+int _setup_tssx(int client_socket) {
 	Session session = SESSION_INITIALIZER;
 	ConnectionOptions options;
 
@@ -64,20 +64,20 @@ int setup_tssx(int client_socket) {
 		return ERROR;
 	}
 
-	if (send_segment_id_to_client(client_socket, &session) == ERROR) {
+	if (_send_segment_id_to_client(client_socket, &session) == ERROR) {
 		print_error("Error sending segment ID to client");
 		return ERROR;
 	}
 
-	if (wait_for_client(client_socket) == ERORR) {
-		print_error("Error receiving client acknowledgement\n");
+	if (_synchronize_with_client(client_socket) == ERROR) {
+		print_error("Error synchronizing with client during setup\n");
 		return ERROR;
 	}
 
 	return bridge_insert(&bridge, client_socket, &session);
 }
 
-int send_segment_id_to_client(int client_socket, Session *session) {
+int _send_segment_id_to_client(int client_socket, Session *session) {
 	int return_code;
 
 	// clang-format off
@@ -97,11 +97,11 @@ int send_segment_id_to_client(int client_socket, Session *session) {
 	return return_code;
 }
 
-int wait_for_client(int client_fd) {
+int _synchronize_with_client(int client_fd) {
 	char message;
 
 	// Expecting just a single synchronization byte
-	if (read(client_fd, &message, 1) == ERROR) {
+	if (real_read(client_fd, &message, 1) == ERROR) {
 		return ERROR;
 	}
 
@@ -122,8 +122,8 @@ bool is_non_blocking(Connection *connection) {
 }
 
 bool _ready_for(Connection *connection, Operation operation) {
+	assert(connection != NULL);
 	if (operation == READ) {
-		if (connection_peer_died(connection)) return true;
 		return buffer_ready_for(connection->client_buffer, READ);
 	} else {
 		return buffer_ready_for(connection->server_buffer, WRITE);

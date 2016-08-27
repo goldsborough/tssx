@@ -3,14 +3,10 @@
 
 #include "tssx/definitions.h"
 
-/******************** DEFINITIONS ********************/
-
-struct Session;
-struct sockaddr;
-
 /******************** FORWARD DECLARATIONS ********************/
 
-int read_segment_id_from_server(int client_socket);
-int setup_tssx(int fd);
+int _setup_tssx(int fd);
+int _read_segment_id_from_server(int fd);
+int _synchronize_with_server(int fd);
 
 #endif /* CLIENT_OVERRIDES_H */
