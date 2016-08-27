@@ -3,7 +3,7 @@
 
 #ifdef DEBUG
 #include <stdio.h>
-#endif /* DEBUG */
+#endif
 
 #include <stdbool.h>
 

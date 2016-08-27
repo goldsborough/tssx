@@ -92,8 +92,7 @@ int _read_segment_id_from_server(int client_socket) {
 	// clang-format on
 
 	// Put the old flags back in place
-	// Does it make sense to put non-blocking back in place? (else comment)
-	set_socket_flags(client_socket, flags);
+	// set_socket_flags(client_socket, flags);
 
 	// We do need to keep the socket open though, so that
 	// its descriptor cannot be reused by the operating system

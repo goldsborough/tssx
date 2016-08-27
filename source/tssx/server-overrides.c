@@ -3,6 +3,8 @@
 
 #include "tssx/common-overrides.h"
 #include "tssx/server-overrides.h"
+#include "utility/sockets.h"
+
 
 /******************** OVERRIDES ********************/
 
@@ -100,10 +102,16 @@ int _send_segment_id_to_client(int client_socket, Session *session) {
 int _synchronize_with_client(int client_fd) {
 	char message;
 
+	unset_socket_non_blocking(client_fd);
+
 	// Expecting just a single synchronization byte
 	if (real_read(client_fd, &message, 1) == ERROR) {
+		perror("Foo");
 		return ERROR;
 	}
+
+	// Put the old flags back in place
+	// set_socket_flags(client_socket, flags);
 
 	return SUCCESS;
 }
