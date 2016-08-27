@@ -18,6 +18,8 @@
 int create_segment(int total_size) {
 	int id;
 
+	assert(total_size > 0);
+
 	// Generate a random key until it is not taken yet
 	while ((id = shmget(rand(), total_size, SHM_FLAGS)) == ERROR) {
 		if (errno != EEXIST && errno != EINVAL && errno != EACCES) {
@@ -46,11 +48,12 @@ void detach_segment(void* shared_memory) {
 }
 
 void destroy_segment(int segment_id) {
-	if (shmctl(segment_id, IPC_RMID, NULL) == -1) {
+	if (shmctl(segment_id, IPC_RMID, NULL) == ERROR) {
 		throw("Error destroying shared memory segment");
 	}
 }
 
 int segment_size(Buffer* buffer) {
+	assert(buffer->capacity > 0);
 	return sizeof(Buffer) + buffer->capacity;
 }

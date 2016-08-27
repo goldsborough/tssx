@@ -64,17 +64,19 @@ int timeval_to_milliseconds(const struct timeval* time) {
 }
 
 void pin_thread(int where) {
+#ifdef __linux__
 	// Doesn't work on OS X right now
-	// int j;
-	// cpu_set_t cpuset;
-	// pthread_t thread;
-	// thread = pthread_self();
-	// CPU_ZERO(&cpuset);
-	// CPU_SET(where, &cpuset);
-	// pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-	// int s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
-	// if (s != 0) {
-	// 	fprintf(stderr, "error: pthread_getaffinity_np");
-	// 	exit(-1);
-	// }
+	int j;
+	cpu_set_t cpuset;
+	pthread_t thread;
+	thread = pthread_self();
+	CPU_ZERO(&cpuset);
+	CPU_SET(where, &cpuset);
+	pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+	int s = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+	if (s != 0) {
+		fprintf(stderr, "error: pthread_getaffinity_np");
+		exit(-1);
+	}
+#endif
 }

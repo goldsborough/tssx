@@ -52,28 +52,8 @@ ssize_t write(int key, const void *source, size_t requested_bytes) {
 
 /******************** HELPERS ********************/
 
-int send_segment_id_to_client(int client_socket, Session *session) {
-	int return_code;
-
-	// clang-format off
-	return_code = real_write(
-		client_socket,
-		&session->connection->segment_id,
-		sizeof session->connection->segment_id
-	);
-	// clang-format on
-
-	if (return_code == ERROR) {
-		print_error("Error sending segment ID to client");
-		disconnect(session->connection);
-		return ERROR;
-	}
-
-	return return_code;
-}
-
 int setup_tssx(int client_socket) {
-	Session session;
+	Session session = SESSION_INITIALIZER;
 	ConnectionOptions options;
 
 	options = options_from_socket(client_socket, SERVER);
@@ -89,7 +69,43 @@ int setup_tssx(int client_socket) {
 		return ERROR;
 	}
 
+	if (wait_for_client(client_socket) == ERORR) {
+		print_error("Error receiving client acknowledgement\n");
+		return ERROR;
+	}
+
 	return bridge_insert(&bridge, client_socket, &session);
+}
+
+int send_segment_id_to_client(int client_socket, Session *session) {
+	int return_code;
+
+	// clang-format off
+	return_code = real_write(
+		client_socket,
+		&session->connection->segment_id,
+		sizeof session->connection->segment_id
+	);
+	// clang-format on
+
+	if (return_code == ERROR) {
+		perror("Error sending segment ID to client");
+		disconnect(session->connection);
+		return ERROR;
+	}
+
+	return return_code;
+}
+
+int wait_for_client(int client_fd) {
+	char message;
+
+	// Expecting just a single synchronization byte
+	if (read(client_fd, &message, 1) == ERROR) {
+		return ERROR;
+	}
+
+	return SUCCESS;
 }
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/

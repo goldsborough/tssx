@@ -83,7 +83,7 @@ ssize_t connection_read(int key,
 		// incremented the count yet. so maybe the server should set the count to 2
 
 
-		// if (connection_peer_died(session->connection)) return 0;
+		if (connection_peer_died(session->connection)) return 0;
 		// clang-format off
     return buffer_read(
         get_buffer(session->connection, which_buffer),

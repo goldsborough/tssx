@@ -50,8 +50,8 @@ Connection* setup_connection(int segment_id, const ConnectionOptions* options) {
 	shared_memory = attach_segment(connection->segment_id);
 
 	_init_and_increment_open_count(connection, shared_memory);
-	_create_server_buffer(connection, shared_memory, options);
-	_create_client_buffer(connection, shared_memory, options);
+	_retrieve_server_buffer(connection, shared_memory, options);
+	_retrieve_client_buffer(connection, shared_memory, options);
 
 	return connection;
 }
@@ -62,7 +62,7 @@ void connection_add_user(Connection* connection) {
 }
 
 bool connection_peer_died(Connection* connection) {
-  assert(connection != NULL);
+	assert(connection != NULL);
 	return atomic_load(connection->open_count) == 1;
 }
 
@@ -83,7 +83,7 @@ void disconnect(Connection* connection) {
 void _create_server_buffer(Connection* connection,
 													 void* shared_memory,
 													 const ConnectionOptions* options) {
-	shared_memory += sizeof(atomic_count_t);
+	shared_memory += sizeof(connection->open_count);
 	// clang-format off
 	connection->server_buffer = create_buffer(
 			shared_memory,
@@ -96,8 +96,7 @@ void _create_server_buffer(Connection* connection,
 void _create_client_buffer(Connection* connection,
 													 void* shared_memory,
 													 const ConnectionOptions* options) {
-	shared_memory += sizeof(atomic_count_t);
-	shared_memory += segment_size(connection->server_buffer);
+	shared_memory = _client_buffer_offset(connection, shared_memory);
 	// clang-format off
 	connection->client_buffer = create_buffer(
 			shared_memory,
@@ -107,9 +106,18 @@ void _create_client_buffer(Connection* connection,
 	// clang-format on
 }
 
+void _retrieve_server_buffer(Connection* connection, void* shared_memory) {
+	shared_memory += sizeof(connection->open_count);
+	connection->server_buffer = shared_memory;
+}
+
+void _retrieve_client_buffer(Connection* connection, void* shared_memory) {
+	connection->client_buffer = _client_buffer_offset(connection, shared_memory);
+}
+
 void _init_open_count(Connection* connection, void* shared_memory) {
 	connection->open_count = (atomic_count_t*)shared_memory;
-	atomic_init(connection->open_count, 1);
+	*(connection->open_count) = ATOMIC_VAR_INIT(1);
 }
 
 void _init_and_increment_open_count(Connection* connection,
@@ -129,7 +137,7 @@ void _detach_connection(Connection* connection) {
 }
 
 void _destroy_connection(Connection* connection) {
-	// Must grab this first
+	// Must grab this first before detaching
 	int segment_id = connection->segment_id;
 
 	_detach_connection(connection);
@@ -148,4 +156,11 @@ int _connection_segment_size(Connection* connection) {
 	segment_size += sizeof(Buffer) + connection->client_buffer->capacity;
 
 	return segment_size;
+}
+
+void* _client_buffer_offset(Connection* connection, void* shared_memory) {
+	shared_memory += sizeof(connection->open_count);
+	shared_memory += segment_size(connection->server_buffer);
+
+	return shared_memory;
 }

@@ -203,7 +203,7 @@ ssize_t sendto(int fd,
 	if (dest_addr == NULL) {
     return send(fd, buffer, length, flags);
   } else {
-    // Connection-Less sockets (UDP) sockets never use TSSX anyway
+    // Connection-less sockets (UDP) sockets never use TSSX anyway
     return real_sendto(fd, buffer, length, flags, dest_addr, addrlen);
   }
 }

@@ -21,7 +21,6 @@ signal_handler_t old_sigabrt_handler = NULL;
 /******************** INTERFACE ********************/
 
 int bridge_setup(Bridge* bridge) {
-	assert(bridge != NULL);
 	assert(!bridge_is_initialized(bridge));
 
 	session_table_setup(&bridge->session_table);
@@ -33,16 +32,8 @@ int bridge_setup(Bridge* bridge) {
 }
 
 int bridge_destroy(Bridge* bridge) {
-	assert(bridge != NULL);
-
-	// Invalidate (disconnect) all sessions
-	for (size_t index = 0; index < SESSION_TABLE_SIZE; ++index) {
-		Session* session = session_table_get(&bridge->session_table, index);
-		session_invalidate(session);
-	}
-
+	assert(bridge_is_initialized(bridge));
 	session_table_destroy(&bridge->session_table);
-
 	return SUCCESS;
 }
 
@@ -65,12 +56,7 @@ int bridge_add_user(Bridge* bridge) {
 }
 
 int bridge_insert(Bridge* bridge, int fd, Session* session) {
-	if (!bridge_is_initialized(bridge)) {
-		if (bridge_setup(bridge) == ERROR) {
-			return ERROR;
-		}
-	}
-
+	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
 	session_table_assign(&bridge->session_table, fd, session);
 
 	return SUCCESS;
@@ -78,7 +64,8 @@ int bridge_insert(Bridge* bridge, int fd, Session* session) {
 
 int bridge_erase(Bridge* bridge, int fd) {
 	Session* session;
-	assert(bridge_is_initialized(bridge));
+
+	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
 
 	session = session_table_get(&bridge->session_table, fd);
 	session_invalidate(session);
@@ -87,11 +74,7 @@ int bridge_erase(Bridge* bridge, int fd) {
 }
 
 Session* bridge_lookup(Bridge* bridge, int fd) {
-	if (!bridge_is_initialized(bridge)) {
-		if (bridge_setup(bridge) == ERROR) {
-			return NULL;
-		}
-	}
+	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
 
 	return session_table_get(&bridge->session_table, fd);
 }
@@ -99,13 +82,24 @@ Session* bridge_lookup(Bridge* bridge, int fd) {
 bool bridge_has_connection(Bridge* bridge, int fd) {
 	const Session* session;
 
-	assert(bridge_is_initialized(bridge));
+	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
+
 	session = session_table_get(&bridge->session_table, fd);
 
 	return session_has_connection(session);
 }
 
 /******************** PRIVATE ********************/
+
+int _lazy_bridge_setup(Bridge* bridge) {
+	if (!bridge_is_initialized(bridge)) {
+		if (bridge_setup(bridge) == ERROR) {
+			return ERROR;
+		}
+	}
+
+	return SUCCESS;
+}
 
 void _setup_exit_handling() {
 	_setup_signal_handler(SIGINT);

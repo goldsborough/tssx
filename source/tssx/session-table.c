@@ -17,7 +17,6 @@ void session_table_destroy(SessionTable* table) {
 	assert(table != NULL);
 	for (size_t index = 0; index < SESSION_TABLE_SIZE; ++index) {
 		Session* session = &(*table)[index];
-		assert(!session_has_connection(session));
 		session_invalidate(session);
 	}
 }

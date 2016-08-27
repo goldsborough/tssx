@@ -52,6 +52,9 @@ void _create_client_buffer(Connection* connection,
 													 void* shared_memory,
 													 const struct ConnectionOptions* options);
 
+void _retrieve_server_buffer(Connection* connection, void* shared_memory);
+void _retrieve_client_buffer(Connection* connection, void* shared_memory);
+
 void _init_open_count(Connection* connection, void* shared_memory);
 void _init_and_increment_open_count(Connection* connection,
 																		void* shared_memory);
@@ -63,5 +66,6 @@ void _destroy_connection(Connection* connection);
 
 void* _segment_start(Connection* connection);
 int _connection_segment_size(Connection* connection);
+void* _client_buffer_offset(Connection* connection, void* shared_memory);
 
 #endif /* CONNECTION_H */

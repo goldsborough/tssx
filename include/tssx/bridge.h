@@ -45,6 +45,8 @@ extern signal_handler_t old_sigint_handler;
 extern signal_handler_t old_sigterm_handler;
 extern signal_handler_t old_sigabrt_handler;
 
+int _lazy_bridge_setup(Bridge* bridge);
+
 void _setup_exit_handling();
 void _setup_signal_handler(int signal_number);
 

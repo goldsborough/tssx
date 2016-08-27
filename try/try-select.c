@@ -37,6 +37,7 @@ void _accept_select_connections(const fd_set* read_set,
 	int client_socket;
 
 	if (!FD_ISSET(server_socket, read_set)) return;
+
 	if ((client_socket = accept(server_socket, NULL, NULL)) == ERROR) {
 		throw("Error accepting connection on server side");
 	}
@@ -57,7 +58,7 @@ void _handle_select_requests(const fd_set* read_set,
 														 fd_set* sockets,
 														 int highest_fd,
 														 int server_socket) {
-	int code;
+	int amount;
 	char buffer[MESSAGE_SIZE];
 	memset(buffer, '6', sizeof buffer);
 
@@ -66,11 +67,11 @@ void _handle_select_requests(const fd_set* read_set,
 		if (!FD_ISSET(fd, read_set)) continue;
 
 		// read()/recv() returns zero when the peer disconnects
-		if ((code = read(fd, buffer, MESSAGE_SIZE)) == 0) {
+		if ((amount = read(fd, buffer, MESSAGE_SIZE)) == 0) {
 			FD_CLR(fd, sockets);
 			close(fd);
 			printf("%d has died ...\n", fd);
-		} else if (code < MESSAGE_SIZE) {
+		} else if (amount < MESSAGE_SIZE) {
 			throw("Error reading on server side");
 		} else {
 			if (write(fd, buffer, MESSAGE_SIZE) < MESSAGE_SIZE) {

@@ -22,6 +22,8 @@ Buffer *create_buffer(void *shared_memory,
 											const Timeouts *timeouts) {
 	Buffer *buffer = (Buffer *)shared_memory;
 
+	assert(requested_capacity > 0);
+
 	buffer->capacity = requested_capacity;
 	buffer->timeouts = *timeouts;
 	buffer_clear(buffer);
@@ -169,6 +171,8 @@ size_t buffer_free_space(Buffer *buffer) {
 /******* PRIVATE *******/
 
 void *_start_pointer(Buffer *buffer) {
+	// The start of the shared memory data segment is
+	// at (void*)&buffer + sizeof(buffer), i.e. buffer + 1
 	return (void *)++buffer;
 }
 

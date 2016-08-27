@@ -9,7 +9,7 @@
 
 /******************** DEFINITIONS ********************/
 
-#define SESSION_TABLE_SIZE FD_SETSIZE
+#define SESSION_TABLE_SIZE FD_SETSIZE// Usually 1024
 
 typedef Session SessionTable[SESSION_TABLE_SIZE];
 

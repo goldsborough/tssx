@@ -5,7 +5,7 @@
 #include "tssx/session.h"
 
 void session_setup(Session* session) {
-	assert(session != NULL);
+	assert(!session_has_connection(session));
 	session->connection = NULL;
 }
 

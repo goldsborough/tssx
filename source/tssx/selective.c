@@ -114,7 +114,7 @@ int _get_socket_option(int fd, int option_name) {
   );
 	// clang-format on
 
-	if (return_code == -1) {
+	if (return_code == ERROR) {
 		print_error("Error getting socket option");
 		return ERROR;
 	}
