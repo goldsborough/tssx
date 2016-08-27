@@ -27,6 +27,7 @@ int bridge_setup(Bridge* bridge) {
 	_setup_exit_handling();
 
 	bridge->is_initialized = true;
+	bridge->connection_count = 0;
 
 	return SUCCESS;
 }
@@ -43,7 +44,8 @@ bool bridge_is_initialized(const Bridge* bridge) {
 }
 
 int bridge_add_user(Bridge* bridge) {
-	assert(bridge_is_initialized(bridge));
+	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
+	if (bridge->connection_count == 0) return SUCCESS;
 
 	for (size_t index = 0; index < SESSION_TABLE_SIZE; ++index) {
 		Session* session = session_table_get(&bridge->session_table, index);
@@ -57,7 +59,12 @@ int bridge_add_user(Bridge* bridge) {
 
 int bridge_insert(Bridge* bridge, int fd, Session* session) {
 	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
+
 	session_table_assign(&bridge->session_table, fd, session);
+
+	if (session_has_connection(session)) {
+		bridge->connection_count++;
+	}
 
 	return SUCCESS;
 }
@@ -68,6 +75,11 @@ int bridge_erase(Bridge* bridge, int fd) {
 	if (_lazy_bridge_setup(bridge) == ERROR) return ERROR;
 
 	session = session_table_get(&bridge->session_table, fd);
+
+	if (session_has_connection(session)) {
+		bridge->connection_count--;
+	}
+
 	session_invalidate(session);
 
 	return SUCCESS;
@@ -86,6 +98,10 @@ bool bridge_has_connection(Bridge* bridge, int fd) {
 	session = session_table_get(&bridge->session_table, fd);
 
 	return session_has_connection(session);
+}
+
+bool bridge_has_any_connections(const Bridge* bridge) {
+	return bridge->connection_count > 0;
 }
 
 /******************** PRIVATE ********************/

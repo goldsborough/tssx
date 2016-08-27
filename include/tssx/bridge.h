@@ -9,7 +9,7 @@
 /******************** DEFINITIONS ********************/
 
 #define BRIDGE_INITIALIZER \
-	{ false }
+	{ false, 0 }
 
 struct Session;
 
@@ -18,6 +18,7 @@ struct Session;
 // clang-format off
 typedef struct Bridge {
   bool is_initialized;
+  size_t connection_count;
   SessionTable session_table;
 } Bridge;
 // clang-format on
@@ -38,6 +39,7 @@ int bridge_erase(Bridge* bridge, int fd);
 
 struct Session* bridge_lookup(Bridge* bridge, int fd);
 bool bridge_has_connection(Bridge* bridge, int fd);
+bool bridge_has_any_connections(const Bridge* bridge);
 
 /******************** PRIVATE ********************/
 

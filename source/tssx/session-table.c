@@ -24,6 +24,7 @@ void session_table_destroy(SessionTable* table) {
 void session_table_assign(SessionTable* table, size_t index, Session* session) {
 	assert(table != NULL);
 	assert(index < SESSION_TABLE_SIZE);
+	assert((*table)[index].connection == NULL);
 	(*table)[index] = *session;
 }
 
