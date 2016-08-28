@@ -88,7 +88,7 @@ int epoll_pwait(int epfd,
 
 bool has_epoll_instance_associated(int epfd);
 
-size_t epoll_instance_size(int epfd);
+int epoll_instance_size(int epfd);
 
 int close_epoll_instance(int epfd);
 

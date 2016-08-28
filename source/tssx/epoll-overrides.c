@@ -152,13 +152,18 @@ bool has_epoll_instance_associated(int epfd) {
 	return epoll_instance_size(epfd) > 0;
 }
 
-size_t epoll_instance_size(int epfd) {
+int epoll_instance_size(int epfd) {
+  int size = 0;
+  
 	assert(epfd > 2);
 	assert(epfd < NUMBER_OF_EPOLL_INSTANCES);
-	assert(_epoll_instances_are_initialized);
+	
+	if (_lazy_epoll_setup() == ERROR) return ERROR;
 
-	return _epoll_instances[epfd].tssx_count +
-				 _epoll_instances[epfd].normal_count;
+	size += _epoll_instances[epfd].tssx_count;
+	size += _epoll_instances[epfd].normal_count;
+
+	  return size;
 }
 
 int close_epoll_instance(int epfd) {
