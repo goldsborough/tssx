@@ -100,6 +100,8 @@ int epoll_wait(int epfd,
 	EpollInstance *instance;
 	assert(_epoll_instances_are_initialized);
 
+	// or epfd is simply invalid????
+
 	// epoll_create() cannot yet have been called, thus epfd will be invalid
 	if (number_of_events == 0 || !_epoll_instances_are_initialized) {
 		errno = EINVAL;
@@ -107,6 +109,8 @@ int epoll_wait(int epfd,
 	}
 
 	instance = &_epoll_instances[epfd];
+
+	// both counts zero == EINVAL?
 
 	if (instance->normal_count == 0) {
 		return _simple_tssx_epoll_wait(instance, events, number_of_events, timeout);
@@ -430,7 +434,7 @@ int _concurrent_epoll_wait(int epfd,
 	event_count_t event_count = ATOMIC_VAR_INIT(0);
 	struct epoll_event *tssx_events;
 	size_t tssx_event_count;
-	
+
 	// clang-format off
   EpollTask normal_task = {
     epfd, events, number_of_events, timeout, &event_count, 0
@@ -514,11 +518,11 @@ void _normal_epoll_wait(EpollTask *task) {
 }
 
 int _concurrent_tssx_epoll_wait(EpollInstance *instance,
-																 struct epoll_event *events,
-																 size_t number_of_events,
-																 pthread_t normal_thread,
-																 event_count_t *shared_event_count,
-																 int timeout) {
+																struct epoll_event *events,
+																size_t number_of_events,
+																pthread_t normal_thread,
+																event_count_t *shared_event_count,
+																int timeout) {
 	size_t shared_event_count_value;
 	size_t start = current_milliseconds();
 	size_t event_count = 0;
@@ -536,12 +540,12 @@ int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 		}
 
 		if (instance->tssx_count > 1) {
-		  VECTOR_FOR_EACH(&instance->entries, iterator) {
-			  EpollEntry *entry = iterator_get(&iterator);
-			  if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
-				  ++event_count;
-			  }
-		  }
+			VECTOR_FOR_EACH(&instance->entries, iterator) {
+				EpollEntry *entry = iterator_get(&iterator);
+				if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
+					++event_count;
+				}
+			}
 		}
 
 		shared_event_count_value = atomic_load(shared_event_count);
