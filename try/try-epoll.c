@@ -14,21 +14,15 @@ void epoll_loop(int server_socket) {
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
 
-
-	printf("epoll\n");
-	
 	while (true) {
 		int number_of_events;
 
-		puts("10\n");
 		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
-		puts("8\n");
-		printf("number of events:%d\n", number_of_events);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
 			case 0: die("Timeout on epoll\n");
 		}
-		puts("9\n");
+
 		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
 	}
 
@@ -57,7 +51,6 @@ void _register_epoll_socket(int epfd, int socket_fd) {
 }
 
 void _remove_epoll_socket(int epfd, int socket_fd) {
-  puts("REmoving...\n");
 	if (epoll_ctl(epfd, EPOLL_CTL_DEL, socket_fd, NULL) == ERROR) {
 		throw("Error removing socket from epoll instance");
 	}
@@ -88,8 +81,6 @@ void _handle_epoll_requests(int epfd,
 	char buffer[MESSAGE_SIZE];
 	assert(number_of_events > 0);
 
-	puts("6\n");
-
 	for (size_t index = 0; index < number_of_events; ++index) {
 		int fd = events[index].data.fd;
 
@@ -100,9 +91,7 @@ void _handle_epoll_requests(int epfd,
 		} else {
 			int amount_read;
 
-				puts("7\n");
-
-			if ((amount_read = read(fd, buffer, MESSAGE_SIZE)) == 0) {	
+			if ((amount_read = read(fd, buffer, MESSAGE_SIZE)) == 0) {
 				_remove_epoll_socket(epfd, fd);
 			} else if (amount_read < MESSAGE_SIZE) {
 				throw("Error reading on server side");

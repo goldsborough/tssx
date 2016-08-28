@@ -105,10 +105,7 @@ int epoll_wait(int epfd,
 
 	instance = &_epoll_instances[epfd];
 
-	puts("!\n");
-
 	if (instance->tssx_count == 0) {
-	  puts("real\n");
 		return real_epoll_wait(epfd, events, number_of_events, timeout);
 	} else if (instance->normal_count == 0) {
 		return _simple_tssx_epoll_wait(instance, events, number_of_events, timeout);
@@ -185,8 +182,6 @@ int close_epoll_instance(int epfd) {
 
 	instance->tssx_count = 0;
 	instance->normal_count = 0;
-
-	printf("Closing\n");
 
 	// close() calls real_close() on the actual file descriptor
 
@@ -470,8 +465,6 @@ int _concurrent_epoll_wait(int epfd,
   );
 	// clang-format on
 
-	puts("2\n");
-
 	if (pthread_join(normal_thread, NULL) == ERROR) {
 		free(tssx_events);
 		return ERROR;
@@ -482,19 +475,16 @@ int _concurrent_epoll_wait(int epfd,
 		return ERROR;
 	}
 
-	puts("3\n");
-
 	// Copy over
 	for (size_t index = 0; index < tssx_event_count; ++index) {
 		events[normal_task.event_count + index] = tssx_events[index];
 	}
 
-	puts("4\n");
-
 	free(tssx_events);
 	_restore_old_signal_action(&old_action);
 
-	assert(tssx_event_count + normal_task.event_count == atomic_load(&event_count));
+	assert(tssx_event_count + normal_task.event_count ==
+				 atomic_load(&event_count));
 
 	return atomic_load(&event_count);
 }
@@ -513,8 +503,6 @@ int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task) {
 void _normal_epoll_wait(EpollTask *task) {
 	assert(task != NULL);
 
-	printf("normal start\n");
-	
 	// Only start polling if in the mean time the other thread
 	// didn't already find events (and we missed the signal) or
 	// had an error occur, in which case we also don't want to poll
@@ -528,8 +516,6 @@ void _normal_epoll_wait(EpollTask *task) {
     );
 	   // clang-format on}
    }
-
-	printf("normal end\n");
 
 	// Don't touch anything else if there was an error in the main thread
 	if (_there_was_an_error(task->shared_event_count)) return;
@@ -567,21 +553,18 @@ int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 	assert(instance->tssx_count > 0);
 	assert(number_of_events > 0);
 
-	puts("concurrent start\n");
-
 	// Do-while for the case of non-blocking (timeout == -1)
 	// so that we do at least one iteration
 
 	do {
 		if (_check_epoll_entry(first, events, number_of_events, event_count)) {
-		  puts("first\n");
 			++event_count;
 		}
 
 		if (event_count < number_of_events && instance->tssx_count > 1) {
 			VECTOR_FOR_EACH(&instance->entries, iterator) {
 			  EpollEntry *entry = iterator_get(&iterator);
-				if (_check_epoll_entry(entry, events, number_of_events, event_count)) {		       
+				if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
 					if (++event_count == number_of_events) break;
 				}
 			}
@@ -593,7 +576,6 @@ int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 		if (shared_event_count_value == ERROR) return ERROR;
 		if (shared_event_count_value > 0) break;
 		if (event_count > 0) {
-		  puts("killing\n");
 			_kill_normal_thread(normal_thread);
 			break;
 		}

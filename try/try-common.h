@@ -15,7 +15,7 @@
 
 #define ERROR -1
 #define SUCCESS 0
-#define TIMEOUT 5000 // milliseconds
+#define TIMEOUT 5000// milliseconds
 
 #define SOCKET_PATH "/tmp/try-socket"
 #define MESSAGE_SIZE 4096
