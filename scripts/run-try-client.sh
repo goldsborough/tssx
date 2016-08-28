@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 
 if [ ${OSTYPE//[0-9.]/} = darwin ]; then
   DYLD_INSERT_LIBRARIES=$PWD/../source/tssx/libtssx-client.dylib \

@@ -189,7 +189,9 @@ void _invalid_argument_exception();
 void _destroy_epoll_lock();
 
 bool _is_edge_triggered(const EpollEntry *entry);
-bool _is_oneshot(const Entry *entry);
+bool _is_level_triggered(const EpollEntry *entry);
+
+bool _is_oneshot(const EpollEntry *entry);
 bool _is_edge_for(const EpollEntry *entry, Operation operation);
 bool _is_enabled(const EpollEntry *entry);
 

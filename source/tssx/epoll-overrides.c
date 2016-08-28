@@ -188,7 +188,7 @@ int close_epoll_instance(int epfd) {
 /******************** PRIVATE DEFINITIONS ********************/
 
 // clang-format off
-epoll_operation_t _epoll_operation_map[SUPPORTED_OPERATIONS] = {
+epoll_operation_t _epoll_operation_map[2] = {
   EPOLLIN,
   EPOLLOUT
 };
@@ -609,12 +609,12 @@ bool _check_epoll_entry(EpollEntry *entry,
 		_notify_of_epoll_hangup(entry, output_event);
 		activity = true;
 	} else {
-		if (_check_epoll_event(entry, output_event READ)) activity = true;
+	  if (_check_epoll_event(entry, output_event, READ)) activity = true;
 		if (_check_epoll_event(entry, output_event, WRITE)) activity = true;
 	}
 
 	// Copy over the user data
-	if (activity) event->data = entry->event.data;
+	if (activity) output_event->data = entry->event.data;
 
 	return activity;
 }
@@ -647,7 +647,7 @@ bool _epoll_operation_registered(EpollEntry *entry, size_t operation_index) {
 
 bool _epoll_event_registered(const EpollEntry *entry, int event) {
 	assert(entry != NULL);
-	assert(entry == EPOLLIN || entry == EPOLLOUT || entry == EPOLLRDHUP);
+	assert(event == EPOLLIN || event == EPOLLOUT || event == EPOLLRDHUP);
 	return entry->event.events & event;
 }
 
@@ -659,7 +659,7 @@ bool _epoll_peer_died(EpollEntry *entry) {
 void _notify_of_epoll_hangup(const EpollEntry *entry,
 														 struct epoll_event *output_event) {
 	assert(entry != NULL);
-	assert(epoll_event != NULL);
+	assert(output_event != NULL);
 
 	// This flag is always set, the user's decision is ignored
 	output_event->events |= EPOLLHUP;
@@ -694,7 +694,7 @@ bool _is_level_triggered(const EpollEntry *entry) {
 	return !_is_edge_triggered(entry);
 }
 
-bool _is_oneshot(const Entry *entry) {
+bool _is_oneshot(const EpollEntry *entry) {
 	assert(entry != NULL);
 	return entry->event.events & EPOLLONESHOT;
 }
@@ -706,7 +706,7 @@ bool _is_edge_for(const EpollEntry *entry, Operation operation) {
 
 bool _is_enabled(const EpollEntry *entry) {
 	assert(entry != NULL);
-	return entry->event.flags & ENABLED;
+	return entry->flags & ENABLED;
 }
 
 void _set_poll_edge(EpollEntry *entry, Operation operation) {
