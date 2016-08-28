@@ -72,16 +72,12 @@ void _handle_poll_requests(struct pollfd* poll_entries,
 			continue;
 		}
 
-		puts("1\n");
-
 		if (!(poll_entries[index].revents & POLLIN)) {
 			++index;
 			continue;
 		}
 
-		puts("2\n");
 		amount_read = read(poll_entries[index].fd, buffer, MESSAGE_SIZE);
-		puts("3\n");
 
 		if (amount_read == 0) {
 			_handle_poll_disconnect(poll_entries, index, number_of_connections);
