@@ -68,6 +68,7 @@ void _handle_poll_requests(struct pollfd* poll_entries,
 
 	// The first entry is the listener socket
 	for (size_t index = 1; index < *number_of_connections; /* in loop */) {
+	  
 		if (poll_entries[index].revents & POLLHUP) {
 			_handle_poll_disconnect(poll_entries, index, number_of_connections);
 			continue;

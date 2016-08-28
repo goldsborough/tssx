@@ -26,8 +26,6 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	Vector tssx_fds, normal_fds;
 	int event_count;
 
-	puts("1\n");
-
 	if (nfds == 0) return 0;
 
 	if (_partition(&tssx_fds, &normal_fds, fds, nfds) == ERROR) {
@@ -35,19 +33,14 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	}
 
 	if (tssx_fds.size == 0) {
-		puts("5\n");
 		// We are only dealing with normal (non-tssx) fds
 		event_count = real_poll(fds, nfds, timeout);
 	} else if (normal_fds.size == 0) {
-		puts("6\n");
 		// We are only dealing with tssx connections
 		event_count = _simple_tssx_poll(&tssx_fds, timeout);
 	} else {
-		puts("7\n");
 		event_count = _concurrent_poll(&tssx_fds, &normal_fds, timeout);
 		_join_poll_partition(fds, nfds, &normal_fds);
-
-		puts("2\n");
 	}
 
 	_cleanup(&tssx_fds, &normal_fds);
@@ -143,8 +136,12 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	// be signalled.
 	if (_wait_for_normal_thread() == ERROR) return ERROR;
 
+	puts("1\n");	
+
 	// Note: Will run in this thread, but deals with concurrent polling
 	_concurrent_tssx_poll(&tssx_task, normal_thread);
+
+	puts("2\n");
 
 	// Theoretically not necessary because we synchronize either through
 	// the timeout, or via a change on the ready count (quasi condition variable)
@@ -153,6 +150,8 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	if (pthread_join(normal_thread, NULL) != SUCCESS) return ERROR;
 
 	_restore_old_signal_action(&old_action);
+
+	puts("3\n");	
 
 	// Three cases for the ready count
 	// An error occurred in either polling, then it is -1.
@@ -291,6 +290,7 @@ bool _check_ready(PollEntry* entry, Operation operation) {
 		// _ready_for here is the polymorphic call (see client/server-overrides)
 		if (_ready_for(entry->connection, operation)) {
 			_tell_that_ready_for(entry, operation);
+			printf("%d\n", entry->poll_pointer->fd);
 			return true;
 		}
 	}
