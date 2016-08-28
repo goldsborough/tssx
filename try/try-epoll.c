@@ -22,7 +22,7 @@ void epoll_loop(int server_socket) {
 	while (true) {
 		int number_of_events;
 
-		number_of_events = epoll_pwait(epfd, events, sizeof events, timeout, &sigmask);
+		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
 			case 0: die("Timeout on epoll\n");

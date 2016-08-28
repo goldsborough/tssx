@@ -436,8 +436,5 @@ int _setup_select() {
 
 void _destroy_select_lock() {
     pthread_mutex_unlock(&_select_lock);
-    
-	if (pthread_mutex_destroy(&_select_lock) != SUCCESS) {
-		print_error("Error destroying mutex\n");
-	}
+    pthread_mutex_destroy(&_select_lock);
 }

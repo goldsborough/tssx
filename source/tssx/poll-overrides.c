@@ -331,14 +331,8 @@ int _setup_poll() {
 
 void _destroy_poll_lock_and_condvar() {
 	pthread_mutex_unlock(&_poll_lock);
-
-	if (pthread_mutex_destroy(&_poll_lock) != SUCCESS) {
-		print_error("Error destroying mutex\n");
-	}
-
-	if (pthread_cond_destroy(&_poll_condition) != SUCCESS) {
-		print_error("Error destroying condition variable\n");
-	}
+        pthread_mutex_destroy(&_poll_lock);
+	pthread_cond_destroy(&_poll_condition);
 }
 
 int _signal_tssx_thread() {

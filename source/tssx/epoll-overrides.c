@@ -683,10 +683,7 @@ void _invalid_argument_exception() {
 
 void _destroy_epoll_lock() {
   pthread_mutex_unlock(&_epoll_lock);
-  
-	if (pthread_mutex_destroy(&_epoll_lock) != SUCCESS) {
-		print_error("Error destroying mutex\n");
-	}
+  pthread_mutex_destroy(&_epoll_lock);
 }
 
 bool _is_edge_triggered(const EpollEntry *entry) {
