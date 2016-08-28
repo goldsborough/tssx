@@ -326,7 +326,7 @@ void _clear_set(fd_set* set) {
 }
 
 bool _check_select_events(int fd, Session* session, DescriptorSets* sets) {
-	bool event_occurred = false;
+	bool activity = false;
 
 	assert(session != NULL);
 	assert(sets != NULL);
@@ -334,14 +334,14 @@ bool _check_select_events(int fd, Session* session, DescriptorSets* sets) {
 	if (_select_peer_died(fd, session, sets)) return true;
 
 	if (_waiting_and_ready_for_select(fd, session, sets, READ)) {
-		event_occurred = true;
+		activity = true;
 	}
 
 	if (_waiting_and_ready_for_select(fd, session, sets, WRITE)) {
-		event_occurred = true;
+		activity = true;
 	}
 
-	return event_occurred;
+	return activity;
 }
 
 bool _select_peer_died(int fd, Session* session, DescriptorSets* sets) {
@@ -424,6 +424,7 @@ int _setup_select() {
 	assert(!_select_is_initialized);
 
 	if (atexit(_destroy_select_lock) == ERROR) {
+		print_error("Error registering destructor with atexit() in select\n");
 		return ERROR;
 	}
 

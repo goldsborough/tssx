@@ -132,9 +132,9 @@ int _epoll_push_back_entry(EpollInstance *instance,
 													 struct epoll_event *event,
 													 Session *session);
 
-int _epoll_update_events(EpollInstance *instance,
-												 int fd,
-												 const struct epoll_event *new_event);
+int _epoll_update_instance(EpollInstance *instance,
+													 int fd,
+													 const struct epoll_event *new_event);
 
 EpollEntry *_find_epoll_entry(EpollInstance *instance, int fd);
 
@@ -154,11 +154,11 @@ int _concurrent_epoll_wait(int epfd,
 int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task);
 void _normal_epoll_wait(EpollTask *task);
 int _concurrent_tssx_epoll_wait(EpollInstance *instance,
-																 struct epoll_event *events,
-																 size_t number_of_events,
-																 pthread_t normal_thread,
-																 event_count_t *shared_event_count,
-																 int timeout);
+																struct epoll_event *events,
+																size_t number_of_events,
+																pthread_t normal_thread,
+																event_count_t *shared_event_count,
+																int timeout);
 
 int _tssx_epoll_wait_for_single_entry(EpollEntry *entry,
 																			struct epoll_event *events,
@@ -169,11 +169,17 @@ bool _check_epoll_entry(EpollEntry *entry,
 												struct epoll_event *events,
 												size_t number_of_events,
 												size_t event_count);
-bool _epoll_ready_for_operation(EpollEntry *entry,
-																size_t operation_index,
-																struct epoll_event *event);
-bool _epoll_event_registered(EpollEntry *entry, size_t operation_index);
-bool _check_for_hangup(EpollEntry *entry, struct epoll_event *event);
+bool _check_epoll_event(EpollEntry *entry,
+												struct epoll_event *output_event,
+												Operation operation);
+
+bool _epoll_operation_registered(EpollEntry *entry, size_t operation_index);
+bool _epoll_event_registered(const EpollEntry *entry, int event);
+
+bool _epoll_peer_died(EpollEntry *entry);
+
+void _notify_of_epoll_hangup(const EpollEntry *entry,
+														 struct epoll_event *output_event);
 
 Operation _convert_operation(size_t operation_index);
 void _invalid_argument_exception();

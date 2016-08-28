@@ -161,8 +161,10 @@ bool has_epoll_instance_associated(int epfd) {
 
 
 size_t epoll_instance_size(int epfd) {
-	assert(epfd > 0);
+	assert(epfd > 2);
 	assert(epfd < NUMBER_OF_EPOLL_INSTANCES);
+	assert(_epoll_instances_are_initialized);
+
 	return _epoll_instances[epfd].tssx_count +
 				 _epoll_instances[epfd].normal_count;
 }
@@ -183,6 +185,8 @@ int close_epoll_instance(int epfd) {
 
 	instance->tssx_count = 0;
 	instance->normal_count = 0;
+
+	// close() calls real_close() on the actual file descriptor
 
 	return SUCCESS;
 }
@@ -228,7 +232,8 @@ int _epoll_normal_control_operation(int epfd,
 																		struct epoll_event *event) {
 	if (operation == EPOLL_CTL_ADD) {
 		_epoll_instances[epfd].normal_count++;
-	} else if (operation == EPOLL_CTL_ADD) {
+	} else if (operation == EPOLL_CTL_DEL) {
+		assert(_epoll_instances[epfd].normal_count > 0);
 		_epoll_instances[epfd].normal_count--;
 	}
 
@@ -247,7 +252,7 @@ int _epoll_tssx_control_operation(int epfd,
 			return _epoll_add_to_instance(instance, fd, event, session);
 			break;
 		case EPOLL_CTL_MOD:
-     return _epoll_update_events(instance, fd, event);
+     return _epoll_update_instance(instance, fd, event);
      break;
 		case EPOLL_CTL_DEL:
 			return _epoll_erase_from_instance(instance, fd);
@@ -279,7 +284,7 @@ int _epoll_set_first_entry(EpollInstance *instance,
 	instance->first.event = *event;
 	instance->first.connection = session->connection;
 
-	++instance->tssx_count;
+	instance->tssx_count++;
 
 	return SUCCESS;
 }
@@ -299,7 +304,6 @@ int _epoll_push_back_entry(EpollInstance *instance,
     );
 		// clang-format on
 
-
 		if (code == VECTOR_ERROR) return ERROR;
 	}
 
@@ -307,14 +311,14 @@ int _epoll_push_back_entry(EpollInstance *instance,
 		return ERROR;
 	}
 
-	++instance->tssx_count;
+	instance->tssx_count++;
 
 	return SUCCESS;
 }
 
-int _epoll_update_events(EpollInstance *instance,
-												 int fd,
-												 const struct epoll_event *new_event) {
+int _epoll_update_instance(EpollInstance *instance,
+													 int fd,
+													 const struct epoll_event *new_event) {
 	assert(instance->tssx_count > 0);
 
 	if (fd == instance->first.fd) {
@@ -376,11 +380,11 @@ int _epoll_erase_first_from_instance(EpollInstance *instance) {
 			return ERROR;
 		}
 
+		instance->first = *entry;
+
 		if (vector_pop_back(&instance->entries) == VECTOR_ERROR) {
 			return ERROR;
 		}
-
-		instance->first = *entry;
 	}
 
 	instance->tssx_count--;
@@ -462,9 +466,17 @@ int _concurrent_epoll_wait(int epfd,
   );
 	// clang-format on
 
-	if (pthread_join(normal_thread, NULL) == ERROR) return ERROR;
-	if (_there_was_an_error(&event_count)) return ERROR;
+	if (pthread_join(normal_thread, NULL) == ERROR) {
+		free(tssx_events);
+		return ERROR;
+	}
 
+	if (_there_was_an_error(&event_count)) {
+		free(tssx_events);
+		return ERROR;
+	}
+
+	// Copy over
 	for (size_t index = 0; index < tssx_event_count; ++index) {
 		events[normal_task.event_count + index] = tssx_events[index];
 	}
@@ -539,11 +551,11 @@ int _concurrent_tssx_epoll_wait(EpollInstance *instance,
 			++event_count;
 		}
 
-		if (instance->tssx_count > 1) {
+		if (event_count < number_of_events && instance->tssx_count > 1) {
 			VECTOR_FOR_EACH(&instance->entries, iterator) {
 				EpollEntry *entry = iterator_get(&iterator);
 				if (_check_epoll_entry(entry, events, number_of_events, event_count)) {
-					++event_count;
+					if (++event_count == number_of_events) break;
 				}
 			}
 		}
@@ -585,73 +597,76 @@ bool _check_epoll_entry(EpollEntry *entry,
 												size_t number_of_events,
 												size_t event_count) {
 	bool activity;
-	struct epoll_event *event;
+	struct epoll_event *output_event;
 	assert(entry != NULL);
 
 	if (event_count == number_of_events) return false;
 
-	event = &events[event_count];
-	event->events = 0;
+	output_event = &events[event_count];
+	output_event->events = 0;
 	activity = false;
 
-	for (size_t index = 0; index < SUPPORTED_OPERATIONS; ++index) {
-		if (!_epoll_event_registered(entry, index)) continue;
-		if (_supported_operations[index] == EPOLL_HANGUP) {
-			if (_check_for_hangup(entry, event)) {
-				activity = true;
-			}
-		} else if (_epoll_ready_for_operation(entry, index, event)) {
-			activity = true;
-		}
+	if (_epoll_peer_died(entry)) {
+		_notify_of_epoll_hangup(entry, output_event);
+		activity = true;
+	} else {
+		if (_check_epoll_event(entry, output_event READ)) activity = true;
+		if (_check_epoll_event(entry, output_event, WRITE)) activity = true;
 	}
 
 	// Copy over the user data
 	if (activity) event->data = entry->event.data;
 
-	return false;
+	return activity;
 }
 
-bool _epoll_ready_for_operation(EpollEntry *entry,
-																size_t operation_index,
-																struct epoll_event *event) {
-	Operation operation;
-	assert(event != NULL);
-
-	operation = _convert_operation(operation_index);
-	// This here is a "polymorphic" call to the client/server overrides
-	if (_ready_for(entry->connection, operation)) {
-		event->events |= _supported_operations[operation_index];
-		return true;
+bool _check_epoll_event(EpollEntry *entry,
+												struct epoll_event *output_event,
+												Operation operation) {
+	if (_epoll_operation_registered(entry, operation)) {
+		// This here is a "polymorphic" call to the client/server overrides
+		if (_ready_for(entry->connection, operation)) {
+			output_event->events |= epoll_event;
+			return true;
+		}
 	}
 
 	return false;
 }
 
-bool _check_for_hangup(EpollEntry *entry, struct epoll_event *event) {
+bool _epoll_operation_registered(EpollEntry *entry, size_t operation_index) {
 	assert(entry != NULL);
-	assert(entry->connection != NULL);
-	assert(event != NULL);
+	assert(operation_index == READ || operation_index == WRITE);
+	return _epoll_event_registered(entry, _supported_operations[operation_index]);
+}
 
-	if (connection_peer_died(entry->connection)) {
-		event->events |= EPOLL_HANGUP;
-		return true;
+bool _epoll_event_registered(const EpollEntry *entry, int event) {
+	assert(entry != NULL);
+	assert(entry == EPOLLIN || entry == EPOLLOUT || entry == EPOLLRDHUP);
+	return entry->event.events & event;
+}
+
+bool _epoll_peer_died(EpollEntry *entry) {
+	assert(entry != NULL);
+	return connection_peer_died(entry->connection);
+}
+
+void _notify_of_epoll_hangup(const EpollEntry *entry,
+														 struct epoll_event *output_event) {
+	assert(entry != NULL);
+	assert(epoll_event != NULL);
+
+	// This flag is always set, the user's decision is ignored
+	output_event->events |= EPOLLHUP;
+
+	// read() will return zero on a dead peer
+	output_event->events |= EPOLLIN;
+
+	// EPOLLRDHUP is the actual "peer has died" flag the user will
+	// set if he/she wishes to wait for a hangup event, so we must check for it
+	if (entry->event.events & EPOLLRDHUP) {
+		output_event->events |= EPOLLRDHUP;
 	}
-
-	return false;
-}
-
-Operation _convert_operation(size_t operation_index) {
-	assert(operation_index < SUPPORTED_OPERATIONS);
-	if (_supported_operations[operation_index] == EPOLLIN) return READ;
-	if (_supported_operations[operation_index] == EPOLLOUT) return WRITE;
-
-	assert(false);
-}
-
-bool _epoll_event_registered(EpollEntry *entry, size_t operation_index) {
-	assert(entry != NULL);
-	assert(operation_index < SUPPORTED_OPERATIONS);
-	return entry->event.events & _supported_operations[operation_index];
 }
 
 void _invalid_argument_exception() {
