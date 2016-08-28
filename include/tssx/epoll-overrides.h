@@ -12,7 +12,6 @@
 
 #define NUMBER_OF_EPOLL_INSTANCES 1024
 #define INITIAL_INSTANCE_CAPACITY 8
-#define EPOLL_HANGUP EPOLLRDHUP
 
 /******************** REAL FUNCTIONS ********************/
 
@@ -36,6 +35,7 @@ typedef struct EpollEntry {
 	int fd;
 	struct epoll_event event;
 	Connection *connection;
+	short flags;
 } EpollEntry;
 
 typedef struct EpollInstance {
@@ -94,9 +94,11 @@ int close_epoll_instance(int epfd);
 
 /******************** PRIVATE DEFINITIONS ********************/
 
-#define SUPPORTED_OPERATIONS 3
+#define ENABLED 0x1
+#define READ_EDGE 0x2
+#define WRITE_EDGE 0x4
 
-extern epoll_operation_t _supported_operations[SUPPORTED_OPERATIONS];
+extern epoll_operation_t _epoll_operation_map[2];
 extern EpollInstance _epoll_instances[NUMBER_OF_EPOLL_INSTANCES];
 extern bool _epoll_instances_are_initialized;
 
@@ -185,5 +187,18 @@ Operation _convert_operation(size_t operation_index);
 void _invalid_argument_exception();
 
 void _destroy_epoll_lock();
+
+bool _is_edge_triggered(const EpollEntry *entry);
+bool _is_oneshot(const Entry *entry);
+bool _is_edge_for(const EpollEntry *entry, Operation operation);
+bool _is_enabled(const EpollEntry *entry);
+
+void _set_poll_edge(EpollEntry *entry, Operation operation);
+void _clear_poll_edge(EpollEntry *entry, Operation operation);
+
+void _enable_poll_entry(EpollEntry *entry);
+void _disable_poll_entry(EpollEntry *entry);
+
+int _validate_epoll_wait_arguments(int epfd, int number_of_events);
 
 #endif /* EPOLL_OVERRIDES_H */

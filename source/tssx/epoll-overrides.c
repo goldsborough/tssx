@@ -80,7 +80,7 @@ int epoll_ctl(int epfd, int operation, int fd, struct epoll_event *event) {
 	assert(_epoll_instances_are_initialized);
 
 	// epoll_create() cannot yet have been called, thus epfd will be invalid
-	if (!_epoll_instances_are_initialized) {
+	if (fd < 0 || !_epoll_instances_are_initialized) {
 		errno = EINVAL;
 		return ERROR;
 	}
@@ -100,22 +100,16 @@ int epoll_wait(int epfd,
 	EpollInstance *instance;
 	assert(_epoll_instances_are_initialized);
 
-	// or epfd is simply invalid????
-
-	// epoll_create() cannot yet have been called, thus epfd will be invalid
-	if (number_of_events == 0 || !_epoll_instances_are_initialized) {
-		errno = EINVAL;
+	if (_validate_epoll_wait_arguments(epfd, number_of_events) == ERROR) {
 		return ERROR;
 	}
 
 	instance = &_epoll_instances[epfd];
 
-	// both counts zero == EINVAL?
-
-	if (instance->normal_count == 0) {
-		return _simple_tssx_epoll_wait(instance, events, number_of_events, timeout);
-	} else if (instance->tssx_count == 0) {
+	if (instance->tssx_count == 0) {
 		return real_epoll_wait(epfd, events, number_of_events, timeout);
+	} else if (instance->normal_count == 0) {
+		return _simple_tssx_epoll_wait(instance, events, number_of_events, timeout);
 	} else {
 		return _concurrent_epoll_wait(epfd, events, number_of_events, timeout);
 	}
@@ -194,10 +188,9 @@ int close_epoll_instance(int epfd) {
 /******************** PRIVATE DEFINITIONS ********************/
 
 // clang-format off
-epoll_operation_t _supported_operations[SUPPORTED_OPERATIONS] = {
+epoll_operation_t _epoll_operation_map[SUPPORTED_OPERATIONS] = {
   EPOLLIN,
-  EPOLLOUT,
-  EPOLL_HANGUP // EPOLLRDHUP
+  EPOLLOUT
 };
 // clang-format on
 
@@ -283,6 +276,7 @@ int _epoll_set_first_entry(EpollInstance *instance,
 	instance->first.fd = fd;
 	instance->first.event = *event;
 	instance->first.connection = session->connection;
+	instance->first.flags = ENABLED;
 
 	instance->tssx_count++;
 
@@ -293,7 +287,7 @@ int _epoll_push_back_entry(EpollInstance *instance,
 													 int fd,
 													 struct epoll_event *event,
 													 Session *session) {
-	EpollEntry entry = {fd, *event, session->connection};
+	EpollEntry entry = {fd, *event, session->connection, ENABLED};
 
 	if (instance->tssx_count == 1) {
 		// clang-format off
@@ -323,15 +317,17 @@ int _epoll_update_instance(EpollInstance *instance,
 
 	if (fd == instance->first.fd) {
 		instance->first.event = *new_event;
+		instance->first.flags = ENABLED;
 	} else {
 		EpollEntry *entry = _find_epoll_entry(instance, fd);
 
 		if (entry == NULL) {
 			_invalid_argument_exception();
 			return ERROR;
-		} else {
-			entry->event = *new_event;
 		}
+
+		entry->event = *new_event;
+		entry->flags = ENABLED;
 	}
 
 	return SUCCESS;
@@ -602,6 +598,9 @@ bool _check_epoll_entry(EpollEntry *entry,
 
 	if (event_count == number_of_events) return false;
 
+	// For EPOLLONESHOT behavior
+	if (!_is_enabled(entry)) return false;
+
 	output_event = &events[event_count];
 	output_event->events = 0;
 	activity = false;
@@ -626,8 +625,14 @@ bool _check_epoll_event(EpollEntry *entry,
 	if (_epoll_operation_registered(entry, operation)) {
 		// This here is a "polymorphic" call to the client/server overrides
 		if (_ready_for(entry->connection, operation)) {
-			output_event->events |= epoll_event;
-			return true;
+			if (_is_level_triggered(entry) || _is_edge_for(entry, operation)) {
+				output_event->events |= _epoll_operation_map[operation];
+				_set_poll_edge(entry, operation);
+				if (_is_oneshot(entry)) _disable_poll_entry(entry);
+				return true;
+			}
+		} else {
+			_clear_poll_edge(entry, operation);
 		}
 	}
 
@@ -637,7 +642,7 @@ bool _check_epoll_event(EpollEntry *entry,
 bool _epoll_operation_registered(EpollEntry *entry, size_t operation_index) {
 	assert(entry != NULL);
 	assert(operation_index == READ || operation_index == WRITE);
-	return _epoll_event_registered(entry, _supported_operations[operation_index]);
+	return _epoll_event_registered(entry, _epoll_operation_map[operation_index]);
 }
 
 bool _epoll_event_registered(const EpollEntry *entry, int event) {
@@ -678,4 +683,64 @@ void _destroy_epoll_lock() {
 	if (pthread_mutex_destroy(&_epoll_lock) != SUCCESS) {
 		print_error("Error destroying mutex\n");
 	}
+}
+
+bool _is_edge_triggered(const EpollEntry *entry) {
+	assert(entry != NULL);
+	return entry->event.events & EPOLLET;
+}
+
+bool _is_level_triggered(const EpollEntry *entry) {
+	return !_is_edge_triggered(entry);
+}
+
+bool _is_oneshot(const Entry *entry) {
+	assert(entry != NULL);
+	return entry->event.events & EPOLLONESHOT;
+}
+
+bool _is_edge_for(const EpollEntry *entry, Operation operation) {
+	assert(entry != NULL);
+	return !(entry->flags & (operation == READ) ? READ_EDGE : WRITE_EDGE);
+}
+
+bool _is_enabled(const EpollEntry *entry) {
+	assert(entry != NULL);
+	return entry->event.flags & ENABLED;
+}
+
+void _set_poll_edge(EpollEntry *entry, Operation operation) {
+	assert(entry != NULL);
+	entry->flags |= (operation == READ) ? READ_EDGE : WRITE_EDGE;
+}
+
+void _clear_poll_edge(EpollEntry *entry, Operation operation) {
+	assert(entry != NULL);
+	entry->flags &= ~((operation == READ) ? READ_EDGE : WRITE_EDGE);
+}
+
+void _enable_poll_entry(EpollEntry *entry) {
+	assert(entry != NULL);
+	entry->flags |= ENABLED;
+}
+
+void _disable_poll_entry(EpollEntry *entry) {
+	assert(entry != NULL);
+	entry->flags &= ~ENABLED;
+}
+
+int _validate_epoll_wait_arguments(int epfd, int number_of_events) {
+	if (epfd < 0 || epfd >= NUMBER_OF_EPOLL_INSTANCES) {
+		print_error("Invalid epoll instance file descriptor\n");
+		errno = EINVAL;
+		return ERROR;
+	}
+
+	if (number_of_events == 0) {
+		print_error("epoll event buffer sizes may not be zero\n");
+		errno = EINVAL;
+		return ERROR;
+	}
+
+	return SUCCESS;
 }
