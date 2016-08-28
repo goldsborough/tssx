@@ -10,7 +10,7 @@ void epoll_loop(int server_socket) {
 	int epfd;
 	int timeout;
 
-	timeout = TIMEOUT * 1000;
+	timeout = TIMEOUT;
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
 
@@ -23,10 +23,10 @@ void epoll_loop(int server_socket) {
 		puts("10\n");
 		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
 		puts("8\n");
-		printf("number of events: %d\n", number_of_events);
+		printf("number of events:%d\n", number_of_events);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
-			case 0: die("Timeout on epoll");
+			case 0: die("Timeout on epoll\n");
 		}
 		puts("9\n");
 		_handle_epoll_requests(epfd, server_socket, events, number_of_events);
