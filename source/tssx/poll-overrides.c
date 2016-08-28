@@ -136,12 +136,8 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	// be signalled.
 	if (_wait_for_normal_thread() == ERROR) return ERROR;
 
-	puts("1\n");	
-
 	// Note: Will run in this thread, but deals with concurrent polling
 	_concurrent_tssx_poll(&tssx_task, normal_thread);
-
-	puts("2\n");
 
 	// Theoretically not necessary because we synchronize either through
 	// the timeout, or via a change on the ready count (quasi condition variable)
@@ -150,8 +146,6 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	if (pthread_join(normal_thread, NULL) != SUCCESS) return ERROR;
 
 	_restore_old_signal_action(&old_action);
-
-	puts("3\n");	
 
 	// Three cases for the ready count
 	// An error occurred in either polling, then it is -1.
@@ -290,7 +284,6 @@ bool _check_ready(PollEntry* entry, Operation operation) {
 		// _ready_for here is the polymorphic call (see client/server-overrides)
 		if (_ready_for(entry->connection, operation)) {
 			_tell_that_ready_for(entry, operation);
-			printf("%d\n", entry->poll_pointer->fd);
 			return true;
 		}
 	}

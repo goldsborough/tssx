@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <signal.h>
 
 #include "try-common.h"
 #include "try-select.h"
@@ -9,6 +10,10 @@ void select_loop(int server_socket) {
 	int highest_fd;
 	fd_set sockets;
 	struct timeval timeout;
+	sigset_t sigmask;
+
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
 
 	setup_timeout(&timeout);
 	FD_ZERO(&sockets);
