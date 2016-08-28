@@ -1,7 +1,9 @@
+
 #define _GNU_SOURCE
 
 #include <assert.h>
 #include <signal.h>
+#include <pthread.h>
 
 #include "tssx/common-poll-overrides.h"
 #include "tssx/connection.h"
@@ -71,4 +73,28 @@ void _kill_normal_thread(pthread_t normal_thread) {
 	if (pthread_kill(normal_thread, POLL_SIGNAL) != SUCCESS) {
 		throw("Error killing normal thread");
 	}
+}
+
+int _set_poll_mask(pthread_mutex_t* lock, const sigset_t* sigmask, sigset_t* original_mask) {
+	if (pthread_mutex_lock(lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_sigmask(SIG_SETMASK, sigmask, original_mask) != SUCCESS) {
+		return ERROR;
+	}
+
+	return SUCCESS;
+}
+
+int _restore_poll_mask(pthread_mutex_t* lock, const sigset_t* original_mask) {
+	if (pthread_sigmask(SIG_SETMASK, original_mask, NULL) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_mutex_unlock(lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	return SUCCESS;
 }

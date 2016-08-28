@@ -25,22 +25,30 @@ int real_poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	Vector tssx_fds, normal_fds;
 	int event_count;
+	puts("adsfasfsdf\n");
 
 	if (nfds == 0) return 0;
 
+	puts("!!\n");
 	if (_partition(&tssx_fds, &normal_fds, fds, nfds) == ERROR) {
 		return ERROR;
 	}
+	puts("?\n");
 
 	if (tssx_fds.size == 0) {
+	  puts("normal\n");
 		// We are only dealing with normal (non-tssx) fds
 		event_count = real_poll(fds, nfds, timeout);
 	} else if (normal_fds.size == 0) {
+	  puts("tssx\n");
 		// We are only dealing with tssx connections
 		event_count = _simple_tssx_poll(&tssx_fds, timeout);
 	} else {
+	  puts("123\n");
 		event_count = _concurrent_poll(&tssx_fds, &normal_fds, timeout);
+			  puts("124\n");
 		_join_poll_partition(fds, nfds, &normal_fds);
+			  puts("125\n");
 	}
 
 	_cleanup(&tssx_fds, &normal_fds);
@@ -136,16 +144,19 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	// be signalled.
 	if (_wait_for_normal_thread() == ERROR) return ERROR;
 
+	puts("10\n");
+
 	// Note: Will run in this thread, but deals with concurrent polling
 	_concurrent_tssx_poll(&tssx_task, normal_thread);
-
+	puts("11\n");
 	// Theoretically not necessary because we synchronize either through
 	// the timeout, or via a change on the ready count (quasi condition variable)
 	// Although, note that POSIX requires a join to reclaim resources,
 	// unless we detach the thread with pthread_detach to make it a daemon
 	if (pthread_join(normal_thread, NULL) != SUCCESS) return ERROR;
-
+	puts("12\n");
 	_restore_old_signal_action(&old_action);
+		puts("13\n");
 
 	// Three cases for the ready count
 	// An error occurred in either polling, then it is -1.
@@ -332,6 +343,8 @@ int _setup_poll() {
 }
 
 void _destroy_poll_lock_and_condvar() {
+    pthread_mutex_unlock(&_poll_lock);
+    
 	if (pthread_mutex_destroy(&_poll_lock) != SUCCESS) {
 		print_error("Error destroying mutex\n");
 	}

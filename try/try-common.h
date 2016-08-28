@@ -15,13 +15,13 @@
 
 #define ERROR -1
 #define SUCCESS 0
-#define TIMEOUT 5000// milliseconds
+#define TIMEOUT 20000// milliseconds
 
 #define SOCKET_PATH "/tmp/try-socket"
 #define MESSAGE_SIZE 4096
 #define DEFAULT_METHOD SELECT
 #define BACKLOG 10
-#define TIMEOUT_SECONDS 10
+#define TIMEOUT_SECONDS 20
 
 typedef enum Method { SELECT, POLL, EPOLL } Method;
 

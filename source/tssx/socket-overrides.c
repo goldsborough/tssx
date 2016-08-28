@@ -13,6 +13,7 @@
 #include "tssx/session.h"
 #include "tssx/socket-overrides.h"
 #include "utility/utility.h"
+#include "tssx/epoll-overrides.h"
 
 /******************** REAL FUNCTIONS ********************/
 

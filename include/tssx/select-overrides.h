@@ -136,9 +136,6 @@ bool _select_timeout_elapsed(size_t start, int timeout);
 
 void _clear_set(fd_set *set);
 
-int _select_set_mask(const sigset_t *sigmask, sigset_t *original_mask);
-int _select_restore_mask(const sigset_t *original_mask);
-
 int _lazy_select_setup();
 int _setup_select();
 void _destroy_select_lock();

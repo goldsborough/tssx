@@ -1,4 +1,5 @@
 #include <sys/epoll.h>
+#include <signal.h>
 
 #include "try-common.h"
 #include "try-epoll.h"
@@ -10,6 +11,10 @@ void epoll_loop(int server_socket) {
 	int epfd;
 	int timeout;
 
+	sigset_t sigmask;
+	sigemptyset(&sigmask);
+	sigaddset(&sigmask, SIGINT);
+
 	timeout = TIMEOUT;
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
@@ -17,7 +22,7 @@ void epoll_loop(int server_socket) {
 	while (true) {
 		int number_of_events;
 
-		number_of_events = epoll_wait(epfd, events, sizeof events, timeout);
+		number_of_events = epoll_pwait(epfd, events, sizeof events, timeout, &sigmask);
 		switch (number_of_events) {
 			case ERROR: throw("Error on epoll");
 			case 0: die("Timeout on epoll\n");

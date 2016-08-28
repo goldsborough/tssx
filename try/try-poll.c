@@ -15,15 +15,18 @@ void poll_loop(int server_socket) {
 	number_of_connections = 1;
 
 	while (true) {
+	  		puts("6\n");
 		switch (poll(poll_entries, number_of_connections, TIMEOUT)) {
 			case ERROR: throw("Error on poll"); break;
 			case 0: die("Timeout on poll\n"); break;
 		}
-
+		puts("3\n");
 		_accept_poll_connections(poll_entries,
 														 server_socket,
 														 &number_of_connections);
+				puts("4\n");
 		_handle_poll_requests(poll_entries, &number_of_connections);
+				puts("5\n");
 	}
 }
 
@@ -74,12 +77,16 @@ void _handle_poll_requests(struct pollfd* poll_entries,
 			continue;
 		}
 
+		puts("1\n");
+
 		if (!(poll_entries[index].revents & POLLIN)) {
 			++index;
 			continue;
 		}
 
+				puts("2\n");
 		amount_read = read(poll_entries[index].fd, buffer, MESSAGE_SIZE);
+				puts("3\n");
 
 		if (amount_read == 0) {
 			_handle_poll_disconnect(poll_entries, index, number_of_connections);

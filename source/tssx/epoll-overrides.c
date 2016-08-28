@@ -126,23 +126,11 @@ int epoll_pwait(int epfd,
 		return epoll_wait(epfd, events, number_of_events, timeout);
 	}
 
-	if (pthread_mutex_lock(&_epoll_lock) != SUCCESS) {
-		return ERROR;
-	}
-
-	if (pthread_sigmask(SIG_SETMASK, sigmask, &original_mask) != SUCCESS) {
-		return ERROR;
-	}
+        	if (_set_poll_mask(&_epoll_lock, sigmask, &original_mask) == ERROR) return ERROR;
 
 	event_count = epoll_wait(epfd, events, number_of_events, timeout);
 
-	if (pthread_sigmask(SIG_SETMASK, &original_mask, NULL) != SUCCESS) {
-		return ERROR;
-	}
-
-	if (pthread_mutex_unlock(&_epoll_lock) != SUCCESS) {
-		return ERROR;
-	}
+		if (_restore_poll_mask(&_epoll_lock, &original_mask) == ERROR) return ERROR;
 
 	return event_count;
 }
@@ -694,6 +682,8 @@ void _invalid_argument_exception() {
 }
 
 void _destroy_epoll_lock() {
+  pthread_mutex_unlock(&_epoll_lock);
+  
 	if (pthread_mutex_destroy(&_epoll_lock) != SUCCESS) {
 		print_error("Error destroying mutex\n");
 	}

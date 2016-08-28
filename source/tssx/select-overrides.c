@@ -10,6 +10,7 @@
 
 #include "tssx/bridge.h"
 #include "tssx/connection.h"
+#include "tssx/common-poll-overrides.h"
 #include "tssx/poll-overrides.h"
 #include "tssx/select-overrides.h"
 #include "utility/utility.h"
@@ -84,11 +85,11 @@ int pselect(int nfds,
 		return select(nfds, readfds, writefds, errorfds, timeval_pointer);
 	}
 
-	if (_select_set_mask(sigmask, &original_mask) == ERROR) return ERROR;
+	if (_set_poll_mask(&_select_lock, sigmask, &original_mask) == ERROR) return ERROR;
 
 	event_count = select(nfds, readfds, writefds, errorfds, timeval_pointer);
 
-	if (_select_restore_mask(&original_mask) == ERROR) return ERROR;
+	if (_restore_poll_mask(&_select_lock, &original_mask) == ERROR) return ERROR;
 
 	return event_count;
 }
@@ -434,31 +435,9 @@ int _setup_select() {
 }
 
 void _destroy_select_lock() {
+    pthread_mutex_unlock(&_select_lock);
+    
 	if (pthread_mutex_destroy(&_select_lock) != SUCCESS) {
 		print_error("Error destroying mutex\n");
 	}
-}
-
-int _select_set_mask(const sigset_t* sigmask, sigset_t* original_mask) {
-	if (pthread_mutex_lock(&_select_lock) != SUCCESS) {
-		return ERROR;
-	}
-
-	if (pthread_sigmask(SIG_SETMASK, sigmask, original_mask) != SUCCESS) {
-		return ERROR;
-	}
-
-	return SUCCESS;
-}
-
-int _select_restore_mask(const sigset_t* original_mask) {
-	if (pthread_sigmask(SIG_SETMASK, original_mask, NULL) != SUCCESS) {
-		return ERROR;
-	}
-
-	if (pthread_mutex_unlock(&_select_lock) != SUCCESS) {
-		return ERROR;
-	}
-
-	return SUCCESS;
 }

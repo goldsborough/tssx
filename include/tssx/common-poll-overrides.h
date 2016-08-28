@@ -18,6 +18,8 @@ typedef atomic_int_fast16_t event_count_t;
 
 struct Connection;
 struct sigaction;
+struct pthread_mutex_t;
+struct sigset_t;
 
 /******************** HELPERS ********************/
 
@@ -28,6 +30,9 @@ int _install_poll_signal_handler(struct sigaction *old_action);
 int _restore_old_signal_action(struct sigaction *old_action);
 void _poll_signal_handler(int signal_number);
 void _kill_normal_thread(pthread_t normal_thread);
+
+int _set_poll_mask(pthread_mutex_t* lock, const sigset_t *sigmask, sigset_t *original_mask);
+int _restore_poll_mask(pthread_mutex_t* lock, const sigset_t *original_mask);
 
 /******************** "POLYMORPHIC" FUNCTIONS ********************/
 
