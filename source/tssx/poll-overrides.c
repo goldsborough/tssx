@@ -55,9 +55,17 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	return event_count;
 }
 
-/******************** HELPERS ********************/
+/******************** PRIVATE DEFINITIONS ********************/
 
 const short _operation_map[2] = {POLLIN, POLLOUT};
+
+pthread_cond_t _poll_condition = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t _poll_lock = PTHREAD_MUTEX_INITIALIZER;
+
+bool _normal_thread_ready = false;
+bool _poll_is_initialized = false;
+
+/******************** HELPERS ********************/
 
 int _partition(Vector* tssx_fds,
 							 Vector* normal_fds,
@@ -74,23 +82,17 @@ int _partition(Vector* tssx_fds,
 	for (nfds_t index = 0; index < number_of_fds; ++index) {
 		assert(fds[index].fd > 0);
 
-		puts("7\n");
-
 		// This is necessary for repeated calls with the same poll structures
 		// (the kernel probably does this internally first too)
 		fds[index].revents = 0;
 
-		puts("10\n");
 		Session* session = bridge_lookup(&bridge, fds[index].fd);
-		puts("11\n");
 		if (session_has_connection(session)) {
-			puts("8\n");
 			PollEntry entry;
 			entry.connection = session->connection;
 			entry.poll_pointer = &fds[index];
 			vector_push_back(tssx_fds, &entry);
 		} else {
-			puts("9\n");
 			vector_push_back(normal_fds, &fds[index]);
 		}
 	}
@@ -124,13 +126,22 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	PollTask normal_task = {normal_fds, timeout, &event_count};
 	PollTask tssx_task = {tssx_fds, timeout, &event_count};
 
-	if ((_install_poll_signal_handler(&old_action)) == ERROR) {
-		return ERROR;
-	}
+	if ((_install_poll_signal_handler(&old_action)) == ERROR) return ERROR;
+
+	_normal_thread_ready = false;
 
 	if (_start_normal_poll_thread(&normal_thread, &normal_task) == ERROR) {
 		return ERROR;
 	}
+
+	// We need synchronization because it may otherwise occur that the
+	// main thread (for TSSX) finds an event before the other thread even started
+	// (or at least started polling). It would then send the kill signal before
+	// the other thread can catch it. If the other thread has some fds that
+	// happen to not signal, and has an indefinite timeout, then joining below
+	// will block forever. Thus we need to make sure the other thread is ready to
+	// be signalled.
+	if (_wait_for_normal_thread() == ERROR) return ERROR;
 
 	// Note: Will run in this thread, but deals with concurrent polling
 	_concurrent_tssx_poll(&tssx_task, normal_thread);
@@ -139,9 +150,8 @@ int _concurrent_poll(Vector* tssx_fds, Vector* normal_fds, int timeout) {
 	// the timeout, or via a change on the ready count (quasi condition variable)
 	// Although, note that POSIX requires a join to reclaim resources,
 	// unless we detach the thread with pthread_detach to make it a daemon
-	if (pthread_join(normal_thread, NULL) != SUCCESS) {
-		return ERROR;
-	}
+	if (pthread_join(normal_thread, NULL) != SUCCESS) return ERROR;
+
 	_restore_old_signal_action(&old_action);
 
 	// Three cases for the ready count
@@ -171,7 +181,18 @@ void _normal_poll(PollTask* task) {
 	assert(task != NULL);
 	assert(raw != NULL);
 
-	local_event_count = real_poll(raw, size, task->timeout);
+	// Tell the main thread that it can start polling now
+	if (_signal_tssx_thread() == ERROR) {
+		atomic_store(task->event_count, ERROR);
+		return;
+	}
+
+	// Only start polling if in the mean time the other thread
+	// didn't already find events (and we missed the signal) or
+	// had an error occur, in which case we also don't want to poll
+	if (atomic_load(task->event_count) == 0) {
+		local_event_count = real_poll(raw, size, task->timeout);
+	}
 
 	// Don't touch anything else if there was an error in the main thread
 	if (_there_was_an_error(task->event_count)) return;
@@ -295,4 +316,76 @@ bool _entry_peer_died(PollEntry* entry) {
 void _cleanup(Vector* tssx_fds, Vector* normal_fds) {
 	vector_destroy(tssx_fds);
 	vector_destroy(normal_fds);
+}
+
+int _lazy_poll_setup() {
+	if (!_poll_is_initialized) {
+		return _setup_poll();
+	}
+	return SUCCESS;
+}
+
+int _setup_poll() {
+	assert(!_poll_is_initialized);
+
+	if (atexit(_destroy_poll_lock_and_condvar) == ERROR) {
+		print_error("Error registering destructor with atexit() in poll\n");
+		return ERROR;
+	}
+
+	_poll_is_initialized = true;
+
+	return SUCCESS;
+}
+
+void _destroy_poll_lock_and_condvar() {
+	if (pthread_mutex_destroy(&_poll_lock) != SUCCESS) {
+		print_error("Error destroying mutex\n");
+	}
+
+	if (pthread_cond_destroy(&_poll_condition) != SUCCESS) {
+		print_error("Error destroying condition variable\n");
+	}
+}
+
+int _signal_tssx_thread() {
+	if (pthread_mutex_lock(&_poll_lock) != SUCCESS) {
+		print_error("Error locking mutex\n");
+		return ERROR;
+	}
+
+	_normal_thread_ready = true;
+
+	if (pthread_cond_signal(&_poll_condition) != SUCCESS) {
+		print_error("Error signalling main (tssx) thread\n");
+		return ERROR;
+	}
+
+	if (pthread_mutex_unlock(&_poll_lock) != SUCCESS) {
+		print_error("Error unlocking mutex\n");
+		return ERROR;
+	}
+
+	return SUCCESS;
+}
+
+int _wait_for_normal_thread() {
+	if (pthread_mutex_lock(&_poll_lock) != SUCCESS) {
+		print_error("Error locking mutex\n");
+		return ERROR;
+	}
+
+	while (!_normal_thread_ready) {
+		if (pthread_cond_wait(&_poll_condition, &_poll_lock) != SUCCESS) {
+			print_error("Error waiting for condition in poll\n");
+			return ERROR;
+		}
+	}
+
+	if (pthread_mutex_unlock(&_poll_lock) != SUCCESS) {
+		print_error("Error unlocking mutex\n");
+		return ERROR;
+	}
+
+	return SUCCESS;
 }

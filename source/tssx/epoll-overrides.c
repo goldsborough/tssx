@@ -153,17 +153,17 @@ bool has_epoll_instance_associated(int epfd) {
 }
 
 int epoll_instance_size(int epfd) {
-  int size = 0;
-  
+	int size = 0;
+
 	assert(epfd > 2);
 	assert(epfd < NUMBER_OF_EPOLL_INSTANCES);
-	
+
 	if (_lazy_epoll_setup() == ERROR) return ERROR;
 
 	size += _epoll_instances[epfd].tssx_count;
 	size += _epoll_instances[epfd].normal_count;
 
-	  return size;
+	return size;
 }
 
 int close_epoll_instance(int epfd) {
@@ -503,14 +503,19 @@ int _start_normal_epoll_wait_thread(pthread_t *normal_thread, EpollTask *task) {
 void _normal_epoll_wait(EpollTask *task) {
 	assert(task != NULL);
 
-	// clang-format off
-	task->event_count = real_epoll_wait(
-      task->epfd,
-      task->events,
-      task->number_of_events,
-      task->timeout
-  );
-	// clang-format on
+	// Only start polling if in the mean time the other thread
+	// didn't already find events (and we missed the signal) or
+	// had an error occur, in which case we also don't want to poll
+	if (atomic_load(task->shared_event_count) == 0) {
+		// clang-format off
+  	task->event_count = real_epoll_wait(
+        task->epfd,
+        task->events,
+        task->number_of_events,
+        task->timeout
+    );
+	   // clang-format on}
+   }
 
 	// Don't touch anything else if there was an error in the main thread
 	if (_there_was_an_error(task->shared_event_count)) return;

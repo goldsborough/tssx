@@ -8,15 +8,15 @@ void connection_loop(int client_socket) {
 	memset(buffer, '6', sizeof buffer);
 
 	while (true) {
-		int code;
+		int amount_read;
 
 		if (write(client_socket, buffer, MESSAGE_SIZE) < MESSAGE_SIZE) {
 			throw("Error writing on client side");
 		}
 
-		if ((code = read(client_socket, buffer, MESSAGE_SIZE)) == 0) {
+		if ((amount_read = read(client_socket, buffer, MESSAGE_SIZE)) == 0) {
 			return;
-		} else if (code < MESSAGE_SIZE) {
+		} else if (amount_read < MESSAGE_SIZE) {
 			throw("Error writing on client side");
 		}
 

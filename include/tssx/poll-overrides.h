@@ -37,9 +37,16 @@ int real_poll(struct pollfd fds[], nfds_t nfds, int timeout);
 
 int poll(struct pollfd fds[], nfds_t number, int timeout);
 
-/******************** HELPERS ********************/
+/******************** PRIVATE DEFINITIONS ********************/
 
 extern const short _operation_map[2];
+
+extern pthread_mutex_t _poll_lock;
+extern pthread_cond_t _poll_condition;
+extern bool _normal_thread_ready;
+extern bool _poll_is_initialized;
+
+/******************** HELPERS ********************/
 
 int _partition(struct Vector *tssx_fds,
 							 struct Vector *normal_fds,
@@ -68,5 +75,12 @@ bool _tell_that_ready_for(PollEntry *entry, Operation operation);
 bool _entry_peer_died(PollEntry *entry);
 
 void _cleanup(struct Vector *tssx_fds, struct Vector *normal_fds);
+
+int _lazy_poll_setup();
+int _setup_poll();
+void _destroy_poll_lock_and_condvar();
+
+int _signal_tssx_thread();
+int _wait_for_normal_thread();
 
 #endif /* POLL_OVERRIDES_H */
