@@ -27,6 +27,18 @@ int real_select(int nfds,
 	// clang-format on
 }
 
+int real_pselect(int nfds,
+								 fd_set* readfds,
+								 fd_set* writefds,
+								 fd_set* errorfds,
+								 const struct timespec* timeout,
+								 const sigset_t* sigmask) {
+	// clang-format off
+	return ((real_pselect_t)dlsym(RTLD_NEXT, "pselect"))
+            (nfds, readfds, writefds, errorfds, timeout, sigmask);
+	// clang-format on
+}
+
 /******************** OVERRIDES ********************/
 
 int select(int nfds,
@@ -46,6 +58,47 @@ int select(int nfds,
 		return _forward_to_poll(nfds, &sets, tssx_count + normal_count, timeout);
 	}
 }
+
+int pselect(int nfds,
+						fd_set* readfds,
+						fd_set* writefds,
+						fd_set* errorfds,
+						const struct timespec* timeout,
+						const sigset_t* sigmask) {
+	struct timeval timeval_timeout;
+	struct timeval* timeval_pointer;
+	sigset_t original_mask;
+	int event_count;
+
+	if (_lazy_select_setup() == ERROR) return ERROR;
+
+	if (timeout == NULL) {
+		// Block indefinitely
+		timeval_pointer = NULL;
+	} else {
+		timespec_to_timeval(timeout, &timeval_timeout);
+		timeval_pointer = &timeval_timeout;
+	}
+
+	if (sigmask == NULL) {
+		return select(nfds, readfds, writefds, errorfds, timeval_pointer);
+	}
+
+	if (_select_set_mask(sigmask, &original_mask) == ERROR) return ERROR;
+
+	event_count = select(nfds, readfds, writefds, errorfds, timeval_pointer);
+
+	if (_select_restore_mask(&original_mask) == ERROR) return ERROR;
+
+	return event_count;
+}
+
+/******************** PRIVATE DEFINITIONS ********************/
+
+pthread_mutex_t _select_lock = PTHREAD_MUTEX_INITIALIZER;
+bool _select_is_initialized = false;
+
+/******************** HELPERS ********************/
 
 int _forward_to_poll(size_t highest_fd,
 										 DescriptorSets* sets,
@@ -357,4 +410,54 @@ fd_set* _fd_set_for_poll_event(const DescriptorSets* sets, int poll_event) {
 		case POLLERR: return sets->errorfds;
 		default: assert(false); return NULL;
 	}
+}
+
+int _lazy_select_setup() {
+	if (!_select_is_initialized) {
+		return _setup_select();
+	}
+
+	return SUCCESS;
+}
+
+int _setup_select() {
+	assert(!_select_is_initialized);
+
+	if (atexit(_destroy_select_lock) == ERROR) {
+		return ERROR;
+	}
+
+	_select_is_initialized = true;
+
+	return SUCCESS;
+}
+
+void _destroy_select_lock() {
+	if (pthread_mutex_destroy(&_select_lock) != SUCCESS) {
+		print_error("Error destroying mutex\n");
+	}
+}
+
+int _select_set_mask(const sigset_t* sigmask, sigset_t* original_mask) {
+	if (pthread_mutex_lock(&_select_lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_sigmask(SIG_SETMASK, sigmask, original_mask) != SUCCESS) {
+		return ERROR;
+	}
+
+	return SUCCESS;
+}
+
+int _select_restore_mask(const sigset_t* original_mask) {
+	if (pthread_sigmask(SIG_SETMASK, original_mask, NULL) != SUCCESS) {
+		return ERROR;
+	}
+
+	if (pthread_mutex_unlock(&_select_lock) != SUCCESS) {
+		return ERROR;
+	}
+
+	return SUCCESS;
 }

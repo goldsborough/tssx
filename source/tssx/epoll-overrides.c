@@ -143,7 +143,7 @@ int epoll_pwait(int epfd,
 
 	event_count = epoll_wait(epfd, events, number_of_events, timeout);
 
-	if (pthread_sigmask(SIG_SETMASK, sigmask, &original_mask) != SUCCESS) {
+	if (pthread_sigmask(SIG_SETMASK, &original_mask, NULL) != SUCCESS) {
 		return ERROR;
 	}
 

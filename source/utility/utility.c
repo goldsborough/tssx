@@ -63,6 +63,16 @@ int timeval_to_milliseconds(const struct timeval* time) {
 	return milliseconds;
 }
 
+void timespec_to_timeval(const struct timespec* source,
+												 struct timeval* destination) {
+	assert(destination != NULL);
+
+	if (source == NULL) return;
+
+	destination->tv_sec = source->tv_sec;
+	destination->tv_usec = source->tv_nsec / 1000;
+}
+
 void pin_thread(int where) {
 #ifdef __linux__
 	// Doesn't work on OS X right now

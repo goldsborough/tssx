@@ -14,8 +14,6 @@ void epoll_loop(int server_socket) {
 	epfd = _request_epoll_fd();
 	_register_epoll_socket(epfd, server_socket);
 
-	printf("1\n");
-
 	while (true) {
 		int number_of_events;
 

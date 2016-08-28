@@ -1,6 +1,8 @@
 #ifndef SELECT_OVERRIDES_H
 #define SELECT_OVERRIDES_H
 
+#include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/select.h>
@@ -9,10 +11,19 @@
 
 /******************** DEFINITIONS ********************/
 
+// clang-format off
 typedef int (*real_select_t)(
-		int, fd_set *, fd_set *, fd_set *, struct timeval *);
+		int, fd_set *, fd_set *, fd_set *, struct timeval *
+);
+
+typedef int (*real_pselect_t)(
+    int, fd_set *, fd_set *, fd_set *,
+     const struct timespec *, const sigset_t *
+);
+// clang-format on
 
 struct pollfd;
+struct timespec;
 
 typedef struct DescriptorSets {
 	fd_set *readfds;
@@ -28,6 +39,13 @@ int real_select(int nfds,
 								fd_set *errorfds,
 								struct timeval *timeout);
 
+int real_pselect(int nfds,
+								 fd_set *readfds,
+								 fd_set *writefds,
+								 fd_set *errorfds,
+								 const struct timespec *timeout,
+								 const sigset_t *sigmask);
+
 /******************** OVERRIDES ********************/
 
 int select(int nfds,
@@ -35,6 +53,18 @@ int select(int nfds,
 					 fd_set *writefds,
 					 fd_set *errorfds,
 					 struct timeval *timeout);
+
+int pselect(int nfds,
+						fd_set *readfds,
+						fd_set *writefds,
+						fd_set *errorfds,
+						const struct timespec *timeout,
+						const sigset_t *sigmask);
+
+/******************** PRIVATE DEFINITIONS ********************/
+
+extern pthread_mutex_t _select_lock;
+extern bool _select_is_initialized;
 
 /******************** HELPERS ********************/
 
@@ -105,5 +135,12 @@ fd_set *_fd_set_for_poll_event(const DescriptorSets *sets, int poll_event);
 bool _select_timeout_elapsed(size_t start, int timeout);
 
 void _clear_set(fd_set *set);
+
+int _select_set_mask(const sigset_t *sigmask, sigset_t *original_mask);
+int _select_restore_mask(const sigset_t *original_mask);
+
+int _lazy_select_setup();
+int _setup_select();
+void _destroy_select_lock();
 
 #endif /* SELECT_OVERRIDES_H */

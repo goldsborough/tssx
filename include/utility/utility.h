@@ -10,6 +10,7 @@
 /******************** DEFINITIONS ********************/
 
 struct timeval;
+struct timespec;
 
 /******************** INTERFACE ********************/
 
@@ -58,6 +59,8 @@ void nsleep(int nanoseconds);
 
 int current_milliseconds();
 int timeval_to_milliseconds(const struct timeval* time);
+void timespec_to_timeval(const struct timespec* source,
+												 struct timeval* destination);
 
 void pin_thread(int where);
 
