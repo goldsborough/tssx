@@ -19,7 +19,7 @@ void connection_loop(int server_socket, Method method) {
 		case SELECT: select_loop(server_socket); break;
 		case POLL: poll_loop(server_socket); break;
 #ifdef __APPLE__
-		case EPOLL: throw("epoll not supported on OS X");
+		case EPOLL: die("epoll not supported on OS X\n");
 #else
 		case EPOLL: epoll_loop(server_socket); break;
 #endif
