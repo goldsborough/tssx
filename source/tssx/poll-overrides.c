@@ -26,6 +26,8 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	Vector tssx_fds, normal_fds;
 	int event_count;
 
+	puts("1\n");
+
 	if (nfds == 0) return 0;
 
 	if (_partition(&tssx_fds, &normal_fds, fds, nfds) == ERROR) {
@@ -33,14 +35,19 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout) {
 	}
 
 	if (tssx_fds.size == 0) {
+		puts("5\n");
 		// We are only dealing with normal (non-tssx) fds
 		event_count = real_poll(fds, nfds, timeout);
 	} else if (normal_fds.size == 0) {
+		puts("6\n");
 		// We are only dealing with tssx connections
 		event_count = _simple_tssx_poll(&tssx_fds, timeout);
 	} else {
+		puts("7\n");
 		event_count = _concurrent_poll(&tssx_fds, &normal_fds, timeout);
 		_join_poll_partition(fds, nfds, &normal_fds);
+
+		puts("2\n");
 	}
 
 	_cleanup(&tssx_fds, &normal_fds);
@@ -67,17 +74,23 @@ int _partition(Vector* tssx_fds,
 	for (nfds_t index = 0; index < number_of_fds; ++index) {
 		assert(fds[index].fd > 0);
 
+		puts("7\n");
+
 		// This is necessary for repeated calls with the same poll structures
 		// (the kernel probably does this internally first too)
 		fds[index].revents = 0;
 
+		puts("10\n");
 		Session* session = bridge_lookup(&bridge, fds[index].fd);
+		puts("11\n");
 		if (session_has_connection(session)) {
+			puts("8\n");
 			PollEntry entry;
 			entry.connection = session->connection;
 			entry.poll_pointer = &fds[index];
 			vector_push_back(tssx_fds, &entry);
 		} else {
+			puts("9\n");
 			vector_push_back(normal_fds, &fds[index]);
 		}
 	}

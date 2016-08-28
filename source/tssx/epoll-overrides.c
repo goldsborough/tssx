@@ -60,14 +60,10 @@ int epoll_create(int size) {
 int epoll_create1(int flags) {
 	int epfd;
 
+	if (_lazy_epoll_setup() == ERROR) return ERROR;
+
 	if ((epfd = real_epoll_create1(flags)) == ERROR) {
 		return ERROR;
-	}
-
-	if (!_epoll_instances_are_initialized) {
-		if (_setup_epoll_instances() == ERROR) {
-			return ERROR;
-		}
 	}
 
 	assert(!has_epoll_instance_associated(epfd));
@@ -77,10 +73,11 @@ int epoll_create1(int flags) {
 
 int epoll_ctl(int epfd, int operation, int fd, struct epoll_event *event) {
 	Session *session;
-	assert(_epoll_instances_are_initialized);
 
-	// epoll_create() cannot yet have been called, thus epfd will be invalid
-	if (fd < 0 || !_epoll_instances_are_initialized) {
+	assert(_epoll_instances_are_initialized);
+	if (_lazy_epoll_setup_and_error()) return ERROR;
+
+	if (fd < 0) {
 		errno = EINVAL;
 		return ERROR;
 	}
@@ -98,7 +95,9 @@ int epoll_wait(int epfd,
 							 int number_of_events,
 							 int timeout) {
 	EpollInstance *instance;
+
 	assert(_epoll_instances_are_initialized);
+	if (_lazy_epoll_setup_and_error()) return ERROR;
 
 	if (_validate_epoll_wait_arguments(epfd, number_of_events) == ERROR) {
 		return ERROR;
@@ -152,7 +151,6 @@ bool has_epoll_instance_associated(int epfd) {
 	assert(epfd > 0);
 	return epoll_instance_size(epfd) > 0;
 }
-
 
 size_t epoll_instance_size(int epfd) {
 	assert(epfd > 2);
@@ -609,7 +607,7 @@ bool _check_epoll_entry(EpollEntry *entry,
 		_notify_of_epoll_hangup(entry, output_event);
 		activity = true;
 	} else {
-	  if (_check_epoll_event(entry, output_event, READ)) activity = true;
+		if (_check_epoll_event(entry, output_event, READ)) activity = true;
 		if (_check_epoll_event(entry, output_event, WRITE)) activity = true;
 	}
 
@@ -743,4 +741,21 @@ int _validate_epoll_wait_arguments(int epfd, int number_of_events) {
 	}
 
 	return SUCCESS;
+}
+
+int _lazy_epoll_setup() {
+	if (!_epoll_instances_are_initialized) {
+		return _setup_epoll_instances();
+	}
+	return SUCCESS;
+}
+
+bool _lazy_epoll_setup_and_error() {
+	if (!_epoll_instances_are_initialized) {
+		_setup_epoll_instances();
+		errno = EINVAL;
+		return true;
+	}
+
+	return false;
 }

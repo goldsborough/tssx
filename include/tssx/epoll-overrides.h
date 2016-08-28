@@ -201,6 +201,8 @@ void _clear_poll_edge(EpollEntry *entry, Operation operation);
 void _enable_poll_entry(EpollEntry *entry);
 void _disable_poll_entry(EpollEntry *entry);
 
+int _lazy_epoll_setup();
+bool _lazy_epoll_setup_and_error();
 int _validate_epoll_wait_arguments(int epfd, int number_of_events);
 
 #endif /* EPOLL_OVERRIDES_H */

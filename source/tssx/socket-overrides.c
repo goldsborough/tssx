@@ -159,7 +159,6 @@ int close(int fd) {
 #else
   bridge_erase(&bridge, fd);
 #endif
-
 	return real_close(fd);
 }
 
