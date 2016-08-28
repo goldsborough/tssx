@@ -51,7 +51,7 @@ typedef struct EpollTask {
 	size_t number_of_events;
 	int timeout;
 	event_count_t *shared_event_count;
-	size_t event_count;
+	int event_count;
 } EpollTask;
 
 /******************** REAL FUNCTIONS ********************/
