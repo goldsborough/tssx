@@ -13,7 +13,7 @@ $ LD_PRELOAD=$PWD/path/to/libtssx-server.so ./happy-banana-server
 $ LD_PRELOAD=$PWD/path/to/libtssx-client.so ./happy-banana-client
 ```
 
-where `libtssx-server.so` and `libtssx-client.so` are the result of compiling our library. And that is it! You don't have to recompile a single line, the dynamic linker does all the magic for  you.
+where `libtssx-server.so` and `libtssx-client.so` are the result of compiling our library. And that is it! You don't have to recompile a single line, the dynamic linker does all the magic for you. We support the complete standard [Berkeley Socket API](https://en.wikipedia.org/wiki/Berkeley_sockets#Socket_API_functions), with light implementations of `fcntl` to the extent that is relevant to domain sockets.
 
 ## Compiling
 
